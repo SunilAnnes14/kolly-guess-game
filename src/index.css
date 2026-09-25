@@ -1,0 +1,372 @@
+/* DO NOT CHANGE */
+@import "tailwindcss";
+@import "tw-animate-css";
+@custom-variant dark (&:is(.dark *));
+
+/* DO NOT CHANGE */
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* CHANGE VALUES FOR THEME — KOLLYWOOD: deep black theatre, midnight violet,
+   warm marquee gold, red-orange ember accents. */
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.125 0.018 278); /* deep charcoal-violet */
+  --foreground: oklch(0.97 0.005 85); /* warm white */
+  --card: oklch(0.163 0.024 280);
+  --card-foreground: oklch(0.97 0.005 85);
+  --popover: oklch(0.163 0.024 280);
+  --popover-foreground: oklch(0.97 0.005 85);
+  --primary: oklch(0.8 0.135 78); /* marquee gold */
+  --primary-foreground: oklch(0.16 0.03 78); /* ink on gold */
+  --secondary: oklch(0.235 0.03 282); /* midnight violet surface */
+  --secondary-foreground: oklch(0.97 0.005 85);
+  --muted: oklch(0.21 0.024 280);
+  --muted-foreground: oklch(0.665 0.02 280);
+  --accent: oklch(0.26 0.035 285);
+  --accent-foreground: oklch(0.97 0.005 85);
+  --destructive: oklch(0.63 0.21 27); /* ember red-orange */
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.8 0.135 78);
+  --chart-1: oklch(0.8 0.135 78);
+  --chart-2: oklch(0.63 0.21 27);
+  --chart-3: oklch(0.55 0.16 295);
+  --chart-4: oklch(0.72 0.15 55);
+  --chart-5: oklch(0.6 0.12 200);
+  --sidebar: oklch(0.163 0.024 280);
+  --sidebar-foreground: oklch(0.97 0.005 85);
+  --sidebar-primary: oklch(0.8 0.135 78);
+  --sidebar-primary-foreground: oklch(0.16 0.03 78);
+  --sidebar-accent: oklch(0.235 0.03 282);
+  --sidebar-accent-foreground: oklch(0.97 0.005 85);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.8 0.135 78);
+
+  /* Named brand colours (usable via var()) */
+  --kolly-gold: #f5c542;
+  --kolly-gold-bright: #ffe9a8;
+  --kolly-ember: #ff5a2c;
+  --kolly-violet: #7c5cff;
+  --kolly-midnight: #14102a;
+}
+
+.dark {
+  --background: oklch(0.125 0.018 278);
+  --foreground: oklch(0.97 0.005 85);
+  --card: oklch(0.163 0.024 280);
+  --card-foreground: oklch(0.97 0.005 85);
+  --popover: oklch(0.163 0.024 280);
+  --popover-foreground: oklch(0.97 0.005 85);
+  --primary: oklch(0.8 0.135 78);
+  --primary-foreground: oklch(0.16 0.03 78);
+  --secondary: oklch(0.235 0.03 282);
+  --secondary-foreground: oklch(0.97 0.005 85);
+  --muted: oklch(0.21 0.024 280);
+  --muted-foreground: oklch(0.665 0.02 280);
+  --accent: oklch(0.26 0.035 285);
+  --accent-foreground: oklch(0.97 0.005 85);
+  --destructive: oklch(0.63 0.21 27);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.8 0.135 78);
+  --chart-1: oklch(0.8 0.135 78);
+  --chart-2: oklch(0.63 0.21 27);
+  --chart-3: oklch(0.55 0.16 295);
+  --chart-4: oklch(0.72 0.15 55);
+  --chart-5: oklch(0.6 0.12 200);
+  --sidebar: oklch(0.163 0.024 280);
+  --sidebar-foreground: oklch(0.97 0.005 85);
+  --sidebar-primary: oklch(0.8 0.135 78);
+  --sidebar-primary-foreground: oklch(0.16 0.03 78);
+  --sidebar-accent: oklch(0.235 0.03 282);
+  --sidebar-accent-foreground: oklch(0.97 0.005 85);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.8 0.135 78);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Inter", ui-sans-serif, system-ui, "Noto Sans Tamil",
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: rgb(245 197 66 / 0.85);
+    color: #17110a;
+  }
+  button:not([disabled]),
+  [role="button"]:not([disabled]) {
+    cursor: pointer;
+  }
+}
+
+/* ---------- KOLLYWOOD building blocks (components layer so Tailwind
+   utilities can still override them) ---------- */
+
+@layer components {
+  .font-display {
+    font-family: "Bebas Neue", "Noto Sans Tamil", Impact, sans-serif;
+    letter-spacing: 0.06em;
+  }
+
+  .gold-text {
+    background: linear-gradient(
+      180deg,
+      var(--kolly-gold-bright) 0%,
+      var(--kolly-gold) 48%,
+      #d99a12 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .glass {
+    background: linear-gradient(
+      160deg,
+      rgb(255 255 255 / 0.055),
+      rgb(255 255 255 / 0.02)
+    );
+    border: 1px solid rgb(255 255 255 / 0.09);
+    backdrop-filter: blur(14px);
+  }
+
+  .glass-deep {
+    background: linear-gradient(
+      160deg,
+      rgb(20 16 42 / 0.72),
+      rgb(10 9 16 / 0.86)
+    );
+    border: 1px solid rgb(255 255 255 / 0.1);
+    backdrop-filter: blur(18px);
+  }
+
+  .gold-rule {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(245 197 66 / 0.55),
+      transparent
+    );
+  }
+
+  .text-glow-gold {
+    filter: drop-shadow(0 0 12px rgb(245 197 66 / 0.35));
+  }
+
+  .text-glow-ember {
+    filter: drop-shadow(0 0 12px rgb(255 90 44 / 0.4));
+  }
+
+  /* Cinematic sweep highlight for primary actions */
+  .kolly-cta {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .kolly-cta::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(
+      120deg,
+      transparent 20%,
+      rgb(255 255 255 / 0.35) 50%,
+      transparent 80%
+    );
+    transform: translateX(-120%);
+    transition: transform 0.7s ease;
+  }
+  .kolly-cta:hover::after {
+    transform: translateX(120%);
+  }
+
+  /* Sprocket-holed film strip used across landing + room */
+  .film-strip {
+    background-image: repeating-linear-gradient(
+        90deg,
+        rgb(255 255 255 / 0.22) 0 12px,
+        transparent 12px 30px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        rgb(255 255 255 / 0.22) 0 12px,
+        transparent 12px 30px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        rgb(255 255 255 / 0.05) 0 70px,
+        transparent 70px 78px
+      ),
+      linear-gradient(180deg, rgb(12 10 20 / 0.85), rgb(20 16 42 / 0.65));
+    background-size:
+      100% 8px,
+      100% 8px,
+      100% calc(100% - 24px),
+      100% 100%;
+    background-position:
+      0 5px,
+      0 calc(100% - 5px),
+      0 12px,
+      0 0;
+    background-repeat: repeat-x, repeat-x, repeat-x, no-repeat;
+  }
+
+  .animate-strip {
+    animation: kolly-scroll 2.2s linear infinite;
+  }
+
+  .animate-float {
+    animation: kolly-float 7s ease-in-out infinite;
+  }
+
+  .animate-flicker {
+    animation: kolly-flicker 6s ease-in-out infinite;
+  }
+
+  .animate-shake {
+    animation: kolly-shake 0.45s ease-in-out;
+  }
+
+  .animate-sweep {
+    animation: kolly-sweep 2.6s ease-in-out infinite;
+  }
+}
+
+@keyframes kolly-scroll {
+  from {
+    background-position:
+      0 5px,
+      0 calc(100% - 5px),
+      0 12px,
+      0 0;
+  }
+  to {
+    background-position:
+      -60px 5px,
+      -60px calc(100% - 5px),
+      -60px 12px,
+      0 0;
+  }
+}
+
+@keyframes kolly-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--float-rotate, 0deg));
+  }
+  50% {
+    transform: translateY(-16px) rotate(var(--float-rotate, 0deg));
+  }
+}
+
+@keyframes kolly-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  42% {
+    opacity: 1;
+  }
+  44% {
+    opacity: 0.55;
+  }
+  46% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 0.7;
+  }
+  74% {
+    opacity: 1;
+  }
+}
+
+@keyframes kolly-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes kolly-sweep {
+  from {
+    transform: translateX(-140%) skewX(-18deg);
+  }
+  to {
+    transform: translateX(240%) skewX(-18deg);
+  }
+}
+
+/* Keep it calm for users who prefer reduced motion — unlayered so it wins. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-strip,
+  .animate-float,
+  .animate-flicker,
+  .animate-shake,
+  .animate-sweep {
+    animation: none;
+  }
+}
