@@ -63,7 +63,7 @@ export function Lobby({ room, token }: { room: RoomState; token: string }) {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-        className="glass-deep relative overflow-hidden rounded-3xl px-5 py-8 text-center sm:px-8"
+        className="glass-deep grain relative overflow-hidden rounded-lg px-5 py-8 text-center sm:px-8"
       >
         <div className="film-strip animate-strip absolute inset-x-0 top-0 h-8 opacity-50" />
         <div className="film-strip animate-strip absolute inset-x-0 bottom-0 h-8 opacity-40 [animation-direction:reverse]" />
@@ -110,7 +110,7 @@ export function Lobby({ room, token }: { room: RoomState; token: string }) {
       </motion.div>
 
       {/* ---------- audience ---------- */}
-      <div className="glass rounded-2xl p-5">
+      <div className="glass grain rounded-lg p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-[11px] font-semibold tracking-[0.3em] text-white/55 uppercase">
             👥 In the theatre · {room.players.length}
@@ -135,25 +135,28 @@ export function Lobby({ room, token }: { room: RoomState; token: string }) {
                 damping: 22,
               }}
               className={cn(
-                "flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5",
-                player.isHost
-                  ? "border-primary/40 bg-primary/[0.08]"
-                  : "border-white/[0.07] bg-white/[0.03]",
+                "ticket-card grain flex items-center gap-2.5 rounded-md px-3 py-2.5",
+                player.isHost && "border-[#747c5b]/55",
               )}
             >
-              <span className="font-display grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#ff5a2c]/70 text-sm text-black">
+              <span className="font-display grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[#747c5b]/40 bg-[#30372a] text-sm text-[#c0bba1]">
                 {player.name.charAt(0).toUpperCase()}
               </span>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/90">
-                {player.name}
-                {player.id === me?.id && (
-                  <span className="ml-1.5 text-[10px] tracking-wider text-white/40 uppercase">
-                    you
-                  </span>
-                )}
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="font-type text-[9px] tracking-[0.26em] text-white/35 uppercase">
+                  Seat {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="truncate text-sm font-medium text-white/90">
+                  {player.name}
+                  {player.id === me?.id && (
+                    <span className="ml-1.5 text-[10px] tracking-wider text-white/40 uppercase">
+                      you
+                    </span>
+                  )}
+                </span>
               </span>
               {player.isHost && (
-                <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-1 text-[9px] font-semibold tracking-[0.12em] text-primary uppercase">
+                <span className="flex shrink-0 items-center gap-1 rounded-full border border-[#747c5b]/50 px-2 py-1 text-[9px] font-semibold tracking-[0.14em] text-[#c0bba1] uppercase">
                   <Star className="h-3 w-3" /> Host
                 </span>
               )}
@@ -164,7 +167,7 @@ export function Lobby({ room, token }: { room: RoomState; token: string }) {
             <motion.li
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex items-center gap-2.5 rounded-xl border border-dashed border-white/15 px-3.5 py-2.5 text-xs text-white/45 sm:col-span-2"
+              className="font-type flex items-center gap-2.5 rounded-md border border-dashed border-white/15 px-3.5 py-2.5 text-[11px] tracking-[0.14em] text-white/45 uppercase sm:col-span-2"
             >
               <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
               Waiting for a friend to join — one more seat, please.
@@ -221,7 +224,7 @@ export function Lobby({ room, token }: { room: RoomState; token: string }) {
             className={cn(
               "kolly-cta flex h-14 w-full items-center justify-center gap-2.5 rounded-2xl text-base font-semibold tracking-wide transition-all",
               enoughPlayers
-                ? "bg-primary text-primary-foreground shadow-[0_10px_34px_rgba(245,197,66,0.3)] hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(245,197,66,0.45)] active:translate-y-0"
+                ? "bg-primary text-primary-foreground shadow-[0_10px_34px_rgba(116,124,91,0.3)] hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(116,124,91,0.45)] active:translate-y-0"
                 : "cursor-not-allowed border border-white/10 bg-white/[0.04] text-white/35",
             )}
           >
@@ -237,7 +240,7 @@ export function Lobby({ room, token }: { room: RoomState; token: string }) {
             You take the first question, then the 🎬 passes to the next player.
           </p>
           {error && (
-            <p className="text-center text-sm text-[#ff7a55]">{error}</p>
+            <p className="text-center text-sm text-[#c08a6e]">{error}</p>
           )}
         </div>
       ) : (

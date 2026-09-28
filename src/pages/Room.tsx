@@ -1,3 +1,7 @@
+import {
+  FilmCountdown,
+  ScreenBackdrop,
+} from "@/components/cinema/CinemaDecor";
 import { RoomHeader } from "@/components/kollywood/RoomHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +21,13 @@ import type { RoomState } from "@/pages/room/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMutation, useQuery } from "convex/react";
 import { Film, Loader2 } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useNavigate, useParams } from "react-router";
 
 /**
@@ -36,6 +46,17 @@ export default function Room() {
     code,
     token: identity?.token ?? undefined,
   });
+
+  // A short film-leader countdown whenever a fresh question goes live.
+  const status = room?.status;
+  const [countdown, setCountdown] = useState(0);
+  const lastStatus = useRef(status);
+  useEffect(() => {
+    if (status === "playing" && lastStatus.current !== "playing") {
+      setCountdown((n) => n + 1);
+    }
+    lastStatus.current = status;
+  }, [status]);
 
   if (!code) return <RoomMissing code="—" />;
   if (room === undefined) return <ProjectorLoading />;
@@ -88,15 +109,20 @@ export default function Room() {
 
   return (
     <div className="relative flex min-h-screen flex-col">
-      {/* subtle cinema backdrop */}
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#150f30_0%,transparent_60%)]" />
-        <div className="film-strip animate-strip absolute top-[22%] -left-[6%] h-12 w-[115%] -rotate-2 opacity-25" />
-        <div className="film-strip animate-strip absolute bottom-[14%] -left-[6%] h-12 w-[115%] rotate-2 opacity-20 [animation-direction:reverse] [animation-duration:3.2s]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_50%,rgba(0,0,0,0.6)_100%)]" />
-      </div>
+      <ScreenBackdrop />
 
       <RoomHeader code={room.code} />
+
+      {countdown > 0 && (
+        <FilmCountdown
+          key={countdown}
+          label={
+            room.isShowdown
+              ? "The final showdown"
+              : `Round ${room.round} of ${room.roundsTotal}`
+          }
+        />
+      )}
 
       <AnimatePresence mode="wait" initial={false}>
         <motion.main
@@ -201,12 +227,12 @@ function JoinGate({
         initial={{ opacity: 0, y: 22, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="glass-deep w-full max-w-md rounded-3xl px-5 py-8 text-center sm:px-8"
+        className="glass-deep grain w-full max-w-md rounded-lg px-5 py-8 text-center sm:px-8"
       >
-        <p className="text-[11px] font-semibold tracking-[0.4em] text-primary/85 uppercase">
-          🎟️ Private screening
+        <p className="font-type text-[11px] tracking-[0.42em] text-[#898675] uppercase">
+          Private screening
         </p>
-        <p className="font-display gold-text text-glow-gold mt-4 text-5xl leading-none tracking-[0.28em] sm:text-6xl">
+        <p className="font-display paper-text text-glow-gold mt-4 text-5xl leading-none tracking-[0.28em] sm:text-6xl">
           {code}
         </p>
         <p className="mt-3 text-sm text-white/60">
@@ -239,19 +265,19 @@ function JoinGate({
             onChange={(e) => setName(e.target.value)}
             placeholder="Arun"
             maxLength={18}
-            className="h-12 rounded-xl border-white/15 bg-white/5 text-base placeholder:text-white/25 focus-visible:border-primary/60 focus-visible:ring-primary/40"
+            className="h-12 rounded-md border-[#c0bba1]/16 bg-[#11120f]/60 text-base text-[#c0bba1] placeholder:text-[#898675]/55 focus-visible:border-[#747c5b]/60 focus-visible:ring-[#747c5b]/30"
           />
         </div>
 
-        {error && <p className="mt-3 text-sm text-[#ff7a55]">{error}</p>}
+        {error && <p className="mt-3 text-sm text-[#c08a6e]">{error}</p>}
 
         <button
           type="submit"
           disabled={busy || !name.trim()}
           className={
-            "kolly-cta mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-xl text-base font-semibold transition-all " +
+            "kolly-cta lift font-display mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-md text-lg tracking-[0.18em] transition-all " +
             (name.trim()
-              ? "bg-primary text-primary-foreground shadow-[0_10px_30px_rgba(245,197,66,0.3)] hover:-translate-y-0.5 active:translate-y-0"
+              ? "border border-[#747c5b]/45 bg-[#596344] text-[#e7e3d2] hover:bg-[#616c49]"
               : "cursor-not-allowed border border-white/10 bg-white/[0.04] text-white/35")
           }
         >

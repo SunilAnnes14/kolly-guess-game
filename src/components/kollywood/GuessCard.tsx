@@ -34,7 +34,7 @@ export function GuessCard({ guess }: { guess: RoomGuess }) {
             isCorrect && "bg-primary text-primary-foreground",
             !isPending &&
               !isCorrect &&
-              "bg-destructive/20 text-[#ff7a55]",
+              "bg-destructive/20 text-[#c08a6e]",
           )}
         >
           {isPending ? (
@@ -65,7 +65,7 @@ export function GuessCard({ guess }: { guess: RoomGuess }) {
             "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-[0.16em] uppercase",
             isPending && "bg-primary/15 text-primary",
             isCorrect && "bg-primary text-primary-foreground",
-            !isPending && !isCorrect && "bg-destructive/15 text-[#ff7a55]",
+            !isPending && !isCorrect && "bg-destructive/15 text-[#c08a6e]",
           )}
         >
           {isPending ? "Judging" : isCorrect ? "Correct" : "Wrong"}

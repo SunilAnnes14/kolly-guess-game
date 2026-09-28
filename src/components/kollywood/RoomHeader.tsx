@@ -44,7 +44,7 @@ export function RoomHeader({ code }: { code: string }) {
             type="button"
             onClick={() => navigate("/")}
             title="Leave room"
-            className="grid h-8 w-8 place-items-center rounded-full border border-white/10 text-white/55 transition-colors hover:border-destructive/50 hover:text-[#ff7a55]"
+            className="grid h-8 w-8 place-items-center rounded-full border border-white/10 text-white/55 transition-colors hover:border-destructive/50 hover:text-[#c08a6e]"
           >
             <LogOut className="h-4 w-4" />
           </button>

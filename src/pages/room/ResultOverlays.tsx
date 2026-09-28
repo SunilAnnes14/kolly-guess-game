@@ -68,7 +68,8 @@ function RevealWord({ text, className }: { text: string; className?: string }) {
   );
 }
 
-const CONFETTI_COLORS = ["#f5c542", "#ff5a2c", "#7c5cff", "#ffe9a8", "#ffffff"];
+/* Film-dust flecks — aged paper and olive, never gold or neon. */
+const CONFETTI_COLORS = ["#c0bba1", "#898675", "#747c5b", "#596344", "#e7e3d2"];
 
 /** A tasteful burst of film-strip confetti, looping behind the big moments. */
 function Confetti() {
@@ -118,7 +119,7 @@ function Confetti() {
 
 function PlayerAvatar({ name }: { name: string }) {
   return (
-    <span className="font-display grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#ff5a2c]/70 text-sm text-black">
+    <span className="font-display grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#8a5138]/70 text-sm text-black">
       {name.charAt(0).toUpperCase()}
     </span>
   );
@@ -180,7 +181,7 @@ function ProgressMark({
   }
   if (status === "failed") {
     return (
-      <span className="flex items-center gap-1 rounded-full bg-destructive/20 px-2.5 py-0.5 text-[9px] font-bold tracking-[0.14em] text-[#ff7a55] uppercase">
+      <span className="flex items-center gap-1 rounded-full bg-destructive/20 px-2.5 py-0.5 text-[9px] font-bold tracking-[0.14em] text-[#c08a6e] uppercase">
         <X className="h-3 w-3" /> Failed
       </span>
     );
@@ -360,7 +361,7 @@ export function RoundComplete({
             type="button"
             onClick={advance}
             disabled={busy}
-            className="kolly-cta mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground shadow-[0_10px_34px_rgba(245,197,66,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(245,197,66,0.5)] active:translate-y-0 disabled:opacity-60"
+            className="kolly-cta mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground shadow-[0_10px_34px_rgba(116,124,91,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(116,124,91,0.5)] active:translate-y-0 disabled:opacity-60"
           >
             {busy ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -377,7 +378,7 @@ export function RoundComplete({
           </p>
         )}
 
-        {error && <p className="mt-3 text-sm text-[#ff7a55]">{error}</p>}
+        {error && <p className="mt-3 text-sm text-[#c08a6e]">{error}</p>}
       </motion.div>
     </Shell>
   );
@@ -431,18 +432,23 @@ export function Champion({
         initial={{ opacity: 0, scale: 0.9, y: 22 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 180, damping: 18 }}
-        className="glass-deep relative overflow-hidden rounded-3xl border-primary/35 px-5 py-10 text-center shadow-[0_0_80px_rgba(245,197,66,0.16)] sm:px-9"
+        className="glass-deep relative overflow-hidden rounded-3xl border-primary/35 px-5 py-10 text-center shadow-[0_0_80px_rgba(116,124,91,0.16)] sm:px-9"
       >
-        <motion.p
-          initial={{ opacity: 0, y: -14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.5, ease: EASE }}
-          className="font-display text-3xl tracking-[0.2em] gold-text sm:text-4xl"
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.1, duration: 0.6, ease: EASE }}
+          className="mt-3"
         >
-          🏆 FINAL SCORE
-        </motion.p>
+          <p className="font-type text-[10px] tracking-[0.5em] text-[#898675] uppercase">
+            The end
+          </p>
+          <p className="font-display paper-text mt-3 text-3xl tracking-[0.3em] sm:text-4xl">
+            KOLLYWOOD
+          </p>
+        </motion.div>
 
-        <p className="mt-6 text-[10px] font-semibold tracking-[0.34em] text-white/45 uppercase">
+        <p className="font-type mt-6 text-[10px] tracking-[0.32em] text-[#898675] uppercase">
           {room.roundsTotal} questions · everyone wrote one
         </p>
 
@@ -469,10 +475,13 @@ export function Champion({
           </p>
         </motion.div>
 
-        <div className="gold-rule mx-auto mt-7 w-2/3" />
+        <div className="olive-rule mx-auto mt-7 w-2/3" />
 
         {/* ---------- full leaderboard ---------- */}
-        <ol className="mx-auto mt-6 grid max-w-md gap-2 text-left">
+        <p className="font-type mt-6 text-[10px] tracking-[0.5em] text-[#898675] uppercase">
+          Cast &amp; crew
+        </p>
+        <ol className="mx-auto mt-3 grid max-w-md gap-2 text-left">
           {standings.map((player, index) => (
             <motion.li
               key={player.id}
@@ -531,7 +540,7 @@ export function Champion({
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <>
-              <RotateCcw className="h-4 w-4" /> RUN IT BACK
+              <RotateCcw className="h-4 w-4" /> PLAY AGAIN
             </>
           )}
         </button>
@@ -542,7 +551,7 @@ export function Champion({
         </p>
       )}
 
-      {error && <p className="text-center text-sm text-[#ff7a55]">{error}</p>}
+      {error && <p className="text-center text-sm text-[#c08a6e]">{error}</p>}
     </Shell>
   );
 }

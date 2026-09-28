@@ -1,3 +1,8 @@
+import {
+  FilmReel,
+  ScreenBackdrop,
+  TicketCard,
+} from "@/components/cinema/CinemaDecor";
 import { ClueCross } from "@/components/kollywood/ClueCross";
 import { LivesRow } from "@/components/kollywood/LivesRow";
 import { PlusBoard } from "@/components/kollywood/PlusBoard";
@@ -17,49 +22,13 @@ import { saveIdentity } from "@/lib/roomIdentity";
 import { friendlyError } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useMutation } from "convex/react";
-import {
-  ArrowRight,
-  Clapperboard,
-  Film,
-  Loader2,
-  Popcorn,
-  Star,
-  Ticket,
-} from "lucide-react";
-import { useState, type CSSProperties, type FormEvent } from "react";
+import { ArrowRight, Clapperboard, Loader2, Ticket } from "lucide-react";
+import { useState, type FormEvent } from "react";
 import { useInView } from "react-intersection-observer";
 import { useNavigate, useSearchParams } from "react-router";
 
 const TITLE = "KOLLYWOOD".split("");
 const EASE = [0.16, 1, 0.3, 1] as const;
-
-const FLOATERS = [
-  {
-    Icon: Clapperboard,
-    className: "left-[6%] top-[22%] h-10 w-10 text-primary/35",
-    style: { "--float-rotate": "-10deg", animationDelay: "0.2s" },
-  },
-  {
-    Icon: Film,
-    className: "right-[8%] top-[26%] h-9 w-9 text-[#7c5cff]/40",
-    style: { "--float-rotate": "8deg", animationDelay: "1.6s" },
-  },
-  {
-    Icon: Ticket,
-    className: "left-[12%] bottom-[22%] h-8 w-8 text-[#ff5a2c]/35 hidden sm:block",
-    style: { "--float-rotate": "6deg", animationDelay: "0.9s" },
-  },
-  {
-    Icon: Star,
-    className: "right-[14%] bottom-[26%] h-7 w-7 text-primary/40 hidden sm:block",
-    style: { "--float-rotate": "-6deg", animationDelay: "2.4s" },
-  },
-  {
-    Icon: Popcorn,
-    className: "right-[26%] top-[12%] h-9 w-9 text-primary/25 hidden md:block",
-    style: { "--float-rotate": "10deg", animationDelay: "3.1s" },
-  },
-] as const;
 
 const STEPS = [
   {
@@ -87,25 +56,32 @@ const LOOP = [
     body: "Four buttons — hero, heroine, movie or song. Attack them in whatever order you like.",
   },
   {
-    icon: "👑",
+    icon: "🎬",
     title: "The creator judges",
     body: "Nothing is auto-marked. The friend running the round calls your guess right or wrong.",
   },
   {
-    icon: "✨",
+    icon: "✓",
     title: "Reveal or burn",
     body: "A correct call flips that part to the full answer. A miss burns one KOLLYWOOD letter.",
   },
   {
     icon: "🏆",
     title: "Solve all four",
-    body: "Get hero, heroine, movie and song on your board and that round is yours. The quicker the solve, the bigger the score.",
+    body: "Get hero, heroine, movie and song on your board and that round is yours. The quicker the solve, the bigger the share of the pot.",
   },
   {
     icon: "🔁",
     title: "Pass the clapperboard",
-    body: "When everyone finishes, the next player writes a brand-new question. Everyone creates one, everyone guesses the rest — highest total takes the trophy.",
+    body: "When everyone finishes, the next player writes a brand-new question. Everyone creates one, everyone guesses the rest — highest total takes the crown.",
   },
+];
+
+const PLACINGS = [
+  { place: "01", label: "First to solve", points: "100" },
+  { place: "02", label: "Second to solve", points: "080" },
+  { place: "03", label: "Third to solve", points: "060" },
+  { place: "—", label: "Ran out of letters", points: "000" },
 ];
 
 function toFriendlyError(error: unknown) {
@@ -172,70 +148,70 @@ export default function Landing() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden">
-      {/* ---------- cinematic backdrop ---------- */}
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#1c1440_0%,transparent_58%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,#2b1018_0%,transparent_52%)]" />
-        {/* marquee spotlights */}
-        <div className="absolute -top-32 left-[16%] h-[62vh] w-64 rotate-[16deg] rounded-full bg-gradient-to-b from-[rgba(245,197,66,0.17)] to-transparent blur-3xl sm:w-80" />
-        <div className="absolute -top-28 right-[14%] h-[58vh] w-56 -rotate-[14deg] rounded-full bg-gradient-to-b from-[rgba(124,92,255,0.16)] to-transparent blur-3xl sm:w-72" />
-        {/* drifting film strips */}
-        <div className="film-strip animate-strip absolute top-[14%] -left-[8%] h-16 w-[120%] -rotate-[3deg] opacity-60 sm:h-20" />
-        <div className="film-strip animate-strip absolute bottom-[16%] -left-[8%] h-16 w-[120%] rotate-[2deg] opacity-45 [animation-duration:3.4s] [animation-direction:reverse] sm:h-20" />
-        {/* floating cinema ephemera */}
-        {FLOATERS.map(({ Icon, className, style }, index) => (
-          <Icon
-            key={index}
-            className={`animate-float absolute ${className}`}
-            style={style as CSSProperties}
-          />
-        ))}
-        {/* seat-row vignette */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_45%,rgba(0,0,0,0.65)_100%)]" />
-      </div>
+    <div className="grain relative min-h-screen overflow-x-hidden">
+      <ScreenBackdrop />
+
+      {/* ---------- lights down: the projector warms up ---------- */}
+      <motion.div
+        initial={{ opacity: 1 }}
+        animate={{ opacity: 0 }}
+        transition={{ delay: 0.85, duration: 1.15, ease: "easeInOut" }}
+        className="pointer-events-none fixed inset-0 z-50 bg-[#11120f]"
+      />
 
       {/* ---------- header ---------- */}
       <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-5">
         <div className="flex items-center gap-2.5">
-          <Clapperboard className="h-5 w-5 text-primary" />
-          <span className="font-display text-xl tracking-[0.22em] gold-text">
+          <Clapperboard className="h-5 w-5 text-[#898675]" />
+          <span className="font-display paper-text text-xl tracking-[0.26em]">
             KOLLYWOOD
           </span>
         </div>
-        <p className="hidden text-xs tracking-[0.24em] text-white/45 uppercase sm:block">
-          Made for Tamil movie lovers
+        <p className="font-type hidden text-[11px] tracking-[0.28em] text-[#898675] uppercase sm:block">
+          Est. — a private screening
         </p>
       </header>
 
-      {/* ---------- hero ---------- */}
       <main className="relative z-10">
-        <section className="mx-auto flex max-w-5xl flex-col items-center px-5 pt-10 pb-24 text-center sm:pt-16">
-          <motion.p
-            initial={{ opacity: 0, y: 14 }}
+        {/* ---------- hero ---------- */}
+        <section className="mx-auto flex max-w-5xl flex-col items-center px-5 pt-14 pb-24 text-center sm:pt-24">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.6, ease: EASE }}
-            className="text-[11px] font-semibold tracking-[0.45em] text-primary/85 uppercase sm:text-xs"
+            transition={{ delay: 0.5, duration: 0.9, ease: EASE }}
+            className="relative"
           >
-            A Tamil cinema party game
+            <FilmReel
+              spin
+              className="h-12 w-12 text-[#747c5b]/80 sm:h-14 sm:w-14"
+            />
+          </motion.div>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.9, duration: 0.8 }}
+            className="font-type mt-6 text-[11px] tracking-[0.5em] text-[#898675] uppercase sm:text-xs"
+          >
+            The Tamil movie game
           </motion.p>
 
           <h1
             aria-label="KOLLYWOOD"
-            className="mt-5 flex justify-center text-[clamp(3.4rem,13vw,8.5rem)] leading-[0.92] [perspective:900px]"
+            className="text-lift mt-4 flex justify-center text-[clamp(3rem,12vw,8rem)] leading-[0.94]"
           >
             {TITLE.map((letter, index) => (
               <motion.span
                 key={index}
                 aria-hidden
-                initial={{ opacity: 0, y: 70, rotateX: -75 }}
-                animate={{ opacity: 1, y: 0, rotateX: 0 }}
+                initial={{ opacity: 0, y: 44, filter: "blur(14px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 transition={{
-                  delay: 0.18 + index * 0.07,
-                  duration: 0.75,
+                  delay: 1.05 + index * 0.06,
+                  duration: 0.8,
                   ease: EASE,
                 }}
-                className="font-display gold-text text-glow-gold inline-block"
+                className="font-display paper-text inline-block tracking-[0.04em]"
               >
                 {letter}
               </motion.span>
@@ -243,87 +219,78 @@ export default function Landing() {
           </h1>
 
           <motion.p
-            initial={{ opacity: 0, y: 18 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.05, duration: 0.7, ease: EASE }}
-            className="mt-4 max-w-xl text-lg text-white/85 sm:text-2xl"
+            transition={{ delay: 1.7, duration: 0.8, ease: EASE }}
+            className="mt-5 max-w-xl text-lg leading-relaxed text-[#c0bba1]/80 sm:text-xl"
           >
             Guess the hero. The heroine. The movie. The song.
           </motion.p>
 
           <motion.div
-            initial={{ opacity: 0, y: 22 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.25, duration: 0.7, ease: EASE }}
-            className="mt-10 flex w-full flex-col items-center justify-center gap-4 sm:w-auto sm:flex-row"
+            transition={{ delay: 1.95, duration: 0.8, ease: EASE }}
+            className="mt-11 flex w-full flex-col items-center justify-center gap-4 sm:w-auto sm:flex-row"
           >
             <Button
               type="button"
               onClick={() => setDialog("create")}
-              className="kolly-cta h-14 w-full rounded-full px-9 text-base font-semibold tracking-wide shadow-[0_0_0_rgba(245,197,66,0)] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_36px_rgba(245,197,66,0.35)] active:translate-y-0 sm:w-auto"
+              className="kolly-cta lift font-display h-14 w-full rounded-md border border-[#747c5b]/45 bg-[#596344] px-9 text-lg tracking-[0.2em] text-[#e7e3d2] hover:bg-[#616c49] sm:w-auto"
             >
-              <span className="text-lg">🎬</span> CREATE ROOM
+              <span className="text-base">🎬</span> CREATE ROOM
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={() => setDialog("join")}
-              className="h-14 w-full rounded-full border-primary/45 bg-transparent px-9 text-base font-semibold tracking-wide text-primary transition-all hover:-translate-y-0.5 hover:border-primary hover:bg-primary/10 hover:shadow-[0_10px_30px_rgba(245,197,66,0.2)] active:translate-y-0 sm:w-auto"
+              className="lift font-display h-14 w-full rounded-md border border-[#c0bba1]/22 bg-transparent px-9 text-lg tracking-[0.2em] text-[#c0bba1] hover:border-[#747c5b]/60 hover:bg-[#30372a]/50 sm:w-auto"
             >
-              <span className="text-lg">🎟️</span> JOIN ROOM
+              <span className="text-base">🎟️</span> JOIN ROOM
             </Button>
           </motion.div>
 
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 1.5, duration: 0.8 }}
-            className="mt-6 flex items-center gap-2 text-sm text-white/50"
+            transition={{ delay: 2.2, duration: 0.9 }}
+            className="font-type mt-8 text-[10px] tracking-[0.34em] text-[#898675] uppercase"
           >
-            <Star className="h-3.5 w-3.5 text-primary/70" />
-            Made for Tamil movie lovers.
-          </motion.p>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.7, duration: 0.8 }}
-            className="mt-14 text-[10px] tracking-[0.35em] text-white/35 uppercase"
-          >
-            Private rooms · Real friends · One movie
+            Private rooms · Real friends · One film
           </motion.p>
         </section>
 
         {/* ---------- how it plays ---------- */}
-        <section className="mx-auto w-full max-w-6xl px-5 pb-20 sm:pb-24">
-          <div className="mb-10 text-center">
-            <p className="text-[11px] font-semibold tracking-[0.4em] text-primary/80 uppercase">
+        <section className="mx-auto w-full max-w-6xl px-5 pb-20 sm:pb-28">
+          <div className="mb-11 text-center">
+            <p className="font-type text-[11px] tracking-[0.42em] text-[#898675] uppercase">
               How it plays
             </p>
-            <h2 className="font-display mt-3 text-4xl tracking-[0.06em] text-white sm:text-5xl">
-              Four clues. One movie. <span className="gold-text">Nine lives.</span>
+            <h2 className="font-display mt-3 text-4xl tracking-[0.05em] text-[#c0bba1] sm:text-5xl">
+              Four clues. One film.{" "}
+              <span className="paper-text">Nine letters.</span>
             </h2>
           </div>
 
-          <div className="grid items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="grid items-center gap-9 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="grid gap-4">
               {STEPS.map((step, index) => (
                 <motion.div
                   key={step.n}
-                  initial={{ opacity: 0, x: -26 }}
+                  initial={{ opacity: 0, x: -24 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true, margin: "-60px" }}
                   transition={{ delay: index * 0.1, duration: 0.6, ease: EASE }}
-                  className="glass flex items-start gap-5 rounded-2xl p-5 transition-colors hover:border-primary/30"
+                  className="glass lift flex items-start gap-5 rounded-lg p-5 hover:border-[#747c5b]/45"
                 >
-                  <span className="font-display text-3xl leading-none text-primary/60">
+                  <span className="font-display text-3xl leading-none text-[#747c5b]">
                     {step.n}
                   </span>
                   <div>
-                    <h3 className="text-base font-semibold text-white">
+                    <h3 className="font-display text-xl tracking-[0.06em] text-[#c0bba1]">
                       {step.title}
                     </h3>
-                    <p className="mt-1.5 text-sm leading-relaxed text-white/60">
+                    <p className="mt-1.5 text-sm leading-relaxed text-[#898675]">
                       {step.body}
                     </p>
                   </div>
@@ -332,13 +299,13 @@ export default function Landing() {
             </div>
 
             <motion.div
-              initial={{ opacity: 0, scale: 0.94 }}
+              initial={{ opacity: 0, scale: 0.95 }}
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true, margin: "-60px" }}
               transition={{ duration: 0.7, ease: EASE }}
-              className="glass relative rounded-3xl px-5 py-9 sm:px-8"
+              className="glass-deep grain relative rounded-lg px-5 py-9 sm:px-8"
             >
-              <p className="text-center text-[10px] font-semibold tracking-[0.35em] text-white/45 uppercase">
+              <p className="font-type text-center text-[10px] tracking-[0.35em] text-[#898675] uppercase">
                 Current question
               </p>
               <div
@@ -347,23 +314,15 @@ export default function Landing() {
               >
                 {demoInView && (
                   <ClueCross
-                    initials={{
-                      hero: "V",
-                      heroine: "T",
-                      movie: "G",
-                      song: "A",
-                    }}
+                    initials={{ hero: "V", heroine: "T", movie: "G", song: "A" }}
                   />
                 )}
               </div>
-              <div className="gold-rule mt-6" />
-              <p className="mt-4 text-center text-sm text-white/70">
-                <span className="text-primary">Vijay</span> ·{" "}
-                <span className="text-primary">Trisha</span> ·{" "}
-                <span className="text-primary">Ghilli</span> ·{" "}
-                <span className="text-primary">Appadi Podu</span>
+              <div className="olive-rule mt-6" />
+              <p className="font-type mt-4 text-center text-sm text-[#c0bba1]">
+                Vijay · Trisha · Ghilli · Appadi Podu
               </p>
-              <p className="mt-1 text-center text-xs text-white/45">
+              <p className="mt-1 text-center text-xs text-[#898675]">
                 Your friends only get the first letter of each part.
               </p>
             </motion.div>
@@ -371,31 +330,31 @@ export default function Landing() {
         </section>
 
         {/* ---------- progressive discovery ---------- */}
-        <section className="mx-auto w-full max-w-6xl px-5 pb-20 sm:pb-24">
-          <div className="mb-10 text-center">
-            <p className="text-[11px] font-semibold tracking-[0.4em] text-primary/80 uppercase">
+        <section className="mx-auto w-full max-w-6xl px-5 pb-20 sm:pb-28">
+          <div className="mb-11 text-center">
+            <p className="font-type text-[11px] tracking-[0.42em] text-[#898675] uppercase">
               Guess · approve · reveal
             </p>
-            <h2 className="font-display mt-3 text-4xl tracking-[0.06em] text-white sm:text-5xl">
+            <h2 className="font-display mt-3 text-4xl tracking-[0.05em] text-[#c0bba1] sm:text-5xl">
               Four parts.{" "}
-              <span className="gold-text">Discover them one by one.</span>
+              <span className="paper-text">Discover them one by one.</span>
             </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-white/60 sm:text-base">
+            <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-[#898675] sm:text-base">
               Nobody has to know the whole film. Pick the part you&apos;re sure
               about and guess just that — each answer you land lights up the
               &ldquo;+&rdquo; a little more.
             </p>
           </div>
 
-          <div className="grid items-center gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="grid items-center gap-9 lg:grid-cols-[0.95fr_1.05fr]">
             <motion.div
-              initial={{ opacity: 0, scale: 0.94 }}
+              initial={{ opacity: 0, scale: 0.95 }}
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true, margin: "-60px" }}
               transition={{ duration: 0.7, ease: EASE }}
-              className="glass-deep rounded-3xl px-4 py-8 sm:px-8"
+              className="glass-deep grain rounded-lg px-4 py-8 sm:px-8"
             >
-              <p className="text-center text-[10px] font-semibold tracking-[0.35em] text-white/45 uppercase">
+              <p className="font-type text-center text-[10px] tracking-[0.35em] text-[#898675] uppercase">
                 Two parts found
               </p>
               <div className="mt-6">
@@ -415,8 +374,8 @@ export default function Landing() {
                   }}
                 />
               </div>
-              <div className="gold-rule mt-6" />
-              <p className="mt-4 text-center text-sm leading-relaxed text-white/65">
+              <div className="olive-rule mt-6" />
+              <p className="mt-4 text-center text-sm leading-relaxed text-[#898675]">
                 ✓ Vijay and Trisha are on the board. The movie and the song are
                 still hiding behind their initials.
               </p>
@@ -426,20 +385,23 @@ export default function Landing() {
               {LOOP.map((step, index) => (
                 <motion.div
                   key={step.title}
-                  initial={{ opacity: 0, x: 26 }}
+                  initial={{ opacity: 0, x: 24 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true, margin: "-60px" }}
                   transition={{ delay: index * 0.09, duration: 0.6, ease: EASE }}
-                  className="glass flex items-start gap-4 rounded-2xl p-5 transition-colors hover:border-primary/30"
+                  className="glass lift flex items-start gap-4 rounded-lg p-5 hover:border-[#747c5b]/45"
                 >
-                  <span aria-hidden className="text-2xl leading-none">
+                  <span
+                    aria-hidden
+                    className="font-display mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[#747c5b]/40 text-base text-[#c0bba1]"
+                  >
                     {step.icon}
                   </span>
                   <div>
-                    <h3 className="text-base font-semibold text-white">
+                    <h3 className="font-display text-xl tracking-[0.06em] text-[#c0bba1]">
                       {step.title}
                     </h3>
-                    <p className="mt-1.5 text-sm leading-relaxed text-white/60">
+                    <p className="mt-1.5 text-sm leading-relaxed text-[#898675]">
                       {step.body}
                     </p>
                   </div>
@@ -449,48 +411,95 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ---------- nine lives ---------- */}
-        <section className="mx-auto w-full max-w-4xl px-5 pb-24">
+        {/* ---------- nine letters ---------- */}
+        <section className="mx-auto w-full max-w-4xl px-5 pb-20 sm:pb-28">
           <motion.div
-            initial={{ opacity: 0, y: 26 }}
+            initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-60px" }}
             transition={{ duration: 0.7, ease: EASE }}
-            className="glass-deep rounded-3xl px-5 py-9 text-center sm:px-10"
+            className="glass-deep grain rounded-lg px-5 py-9 text-center sm:px-10"
           >
-            <p className="text-[11px] font-semibold tracking-[0.4em] text-[#ff5a2c] uppercase">
-              Nine chances
+            <p className="font-type text-[11px] tracking-[0.42em] text-[#c08a6e] uppercase">
+              Nine letters
             </p>
-            <div className="mt-6">
+            <div className="mt-7">
               <LivesRow lives={6} />
             </div>
-            <p className="mx-auto mt-6 max-w-lg text-sm leading-relaxed text-white/65">
+            <p className="mx-auto mt-7 max-w-lg text-sm leading-relaxed text-[#898675]">
               Every player gets their OWN nine letters for every question. The
               hero, the heroine, the movie and the song all draw from your own
-              pool — burn all nine and the film gets away while your friends
-              are still guessing.
+              pool — burn all nine and the film gets away while your friends are
+              still guessing.
             </p>
           </motion.div>
         </section>
 
+        {/* ---------- the scoreboard ---------- */}
+        <section className="mx-auto w-full max-w-5xl px-5 pb-20 sm:pb-28">
+          <div className="mb-10 text-center">
+            <p className="font-type text-[11px] tracking-[0.42em] text-[#898675] uppercase">
+              How you win
+            </p>
+            <h2 className="font-display mt-3 text-4xl tracking-[0.05em] text-[#c0bba1] sm:text-5xl">
+              The faster the solve,{" "}
+              <span className="paper-text">the bigger the share.</span>
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-[#898675]">
+              Everyone races the same question at once. Finishing first is what
+              pays — the round only ends once every guesser is done.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {PLACINGS.map((row, index) => (
+              <motion.div
+                key={row.place}
+                initial={{ opacity: 0, y: 18 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-60px" }}
+                transition={{ delay: index * 0.08, duration: 0.55, ease: EASE }}
+              >
+                <TicketCard className="lift h-full text-center">
+                  <p className="font-type text-[10px] tracking-[0.34em] text-[#898675] uppercase">
+                    {row.place}
+                  </p>
+                  <p className="font-display mt-3 text-5xl leading-none paper-text">
+                    {row.points}
+                  </p>
+                  <div className="olive-rule my-4" />
+                  <p className="text-xs leading-relaxed text-[#898675]">
+                    {row.label}
+                  </p>
+                </TicketCard>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
         {/* ---------- final cta ---------- */}
         <section className="mx-auto w-full max-w-3xl px-5 pb-24 text-center">
-          <h2 className="font-display text-4xl tracking-[0.06em] text-white sm:text-5xl">
-            Ready for the <span className="gold-text">first show?</span>
+          <div className="mx-auto mb-8 flex items-center justify-center gap-3 text-[#747c5b]">
+            <span className="h-px w-10 bg-[#747c5b]/50" />
+            <Ticket className="h-4 w-4" />
+            <span className="h-px w-10 bg-[#747c5b]/50" />
+          </div>
+          <h2 className="font-display text-4xl tracking-[0.05em] text-[#c0bba1] sm:text-5xl">
+            Ready for the <span className="paper-text">first show?</span>
           </h2>
-          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button
               type="button"
               onClick={() => setDialog("create")}
-              className="kolly-cta h-14 w-full rounded-full px-8 text-base font-semibold shadow-[0_10px_36px_rgba(245,197,66,0.25)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(245,197,66,0.4)] sm:w-auto"
+              className="lift font-display h-14 w-full rounded-md border border-[#747c5b]/45 bg-[#596344] px-8 text-lg tracking-[0.2em] text-[#e7e3d2] hover:bg-[#616c49] sm:w-auto"
             >
-              <Clapperboard className="h-4 w-4" /> CREATE ROOM
+              🎬 CREATE ROOM
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={() => setDialog("join")}
-              className="h-14 w-full rounded-full border-primary/45 bg-transparent px-8 text-base font-semibold text-primary transition-all hover:-translate-y-0.5 hover:border-primary hover:bg-primary/10 sm:w-auto"
+              className="lift font-display h-14 w-full rounded-md border border-[#c0bba1]/22 bg-transparent px-8 text-lg tracking-[0.2em] text-[#c0bba1] hover:border-[#747c5b]/60 hover:bg-[#30372a]/50 sm:w-auto"
             >
               <ArrowRight className="h-4 w-4" /> JOIN WITH A CODE
             </Button>
@@ -498,12 +507,12 @@ export default function Landing() {
         </section>
       </main>
 
-      <footer className="relative z-10 border-t border-white/10 py-7">
+      <footer className="relative z-10 border-t border-[#c0bba1]/12 py-8">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 px-5 text-center sm:flex-row sm:justify-between sm:text-left">
-          <span className="font-display text-lg tracking-[0.24em] gold-text">
+          <span className="font-display paper-text text-lg tracking-[0.26em]">
             KOLLYWOOD
           </span>
-          <p className="text-xs text-white/45">
+          <p className="font-type text-[11px] tracking-[0.18em] text-[#898675]">
             Made for Tamil movie lovers · Private rooms, no sign-ups
           </p>
         </div>
@@ -511,21 +520,21 @@ export default function Landing() {
 
       {/* ---------- create room dialog ---------- */}
       <Dialog open={dialog === "create"} onOpenChange={closeDialog}>
-        <DialogContent className="glass-deep gap-5 border-white/10 sm:max-w-md">
+        <DialogContent className="glass-deep grain gap-5 border-[#c0bba1]/14 sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-display gold-text text-3xl tracking-[0.1em]">
+            <DialogTitle className="font-display paper-text text-3xl tracking-[0.1em]">
               OPEN A SCREENING
             </DialogTitle>
-            <DialogDescription className="text-white/60">
-              Pick your marquee name — you&apos;ll write the questions and judge
-              every guess.
+            <DialogDescription className="text-[#898675]">
+              Pick your marquee name — you&apos;ll write the first question and
+              judge every guess.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="grid gap-4">
             <div className="grid gap-2">
               <Label
                 htmlFor="create-name"
-                className="text-xs tracking-[0.22em] text-white/55 uppercase"
+                className="font-type text-[11px] tracking-[0.22em] text-[#898675] uppercase"
               >
                 Player name
               </Label>
@@ -536,15 +545,15 @@ export default function Landing() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Sunil"
                 maxLength={18}
-                className="h-12 rounded-xl border-white/15 bg-white/5 text-base placeholder:text-white/25 focus-visible:border-primary/60 focus-visible:ring-primary/40"
+                className="h-12 rounded-md border-[#c0bba1]/16 bg-[#11120f]/60 text-base text-[#c0bba1] placeholder:text-[#898675]/60 focus-visible:border-[#747c5b]/60 focus-visible:ring-[#747c5b]/30"
               />
             </div>
-            {error && <p className="text-sm text-[#ff7a55]">{error}</p>}
+            {error && <p className="text-sm text-[#c08a6e]">{error}</p>}
             <DialogFooter className="gap-2 pt-1">
               <Button
                 type="submit"
                 disabled={busy || name.trim().length === 0}
-                className="kolly-cta h-12 w-full rounded-xl text-base font-semibold"
+                className="kolly-cta lift font-display h-12 w-full rounded-md border border-[#747c5b]/45 bg-[#596344] text-lg tracking-[0.18em] text-[#e7e3d2] hover:bg-[#616c49]"
               >
                 {busy ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -561,12 +570,12 @@ export default function Landing() {
 
       {/* ---------- join room dialog ---------- */}
       <Dialog open={dialog === "join"} onOpenChange={closeDialog}>
-        <DialogContent className="glass-deep gap-5 border-white/10 sm:max-w-md">
+        <DialogContent className="glass-deep grain gap-5 border-[#c0bba1]/14 sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-display gold-text text-3xl tracking-[0.1em]">
+            <DialogTitle className="font-display paper-text text-3xl tracking-[0.1em]">
               ENTER THE SCREENING
             </DialogTitle>
-            <DialogDescription className="text-white/60">
+            <DialogDescription className="text-[#898675]">
               Drop your name and the 6-character code your friend shared.
             </DialogDescription>
           </DialogHeader>
@@ -574,7 +583,7 @@ export default function Landing() {
             <div className="grid gap-2">
               <Label
                 htmlFor="join-name"
-                className="text-xs tracking-[0.22em] text-white/55 uppercase"
+                className="font-type text-[11px] tracking-[0.22em] text-[#898675] uppercase"
               >
                 Player name
               </Label>
@@ -585,13 +594,13 @@ export default function Landing() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Arun"
                 maxLength={18}
-                className="h-12 rounded-xl border-white/15 bg-white/5 text-base placeholder:text-white/25 focus-visible:border-primary/60 focus-visible:ring-primary/40"
+                className="h-12 rounded-md border-[#c0bba1]/16 bg-[#11120f]/60 text-base text-[#c0bba1] placeholder:text-[#898675]/60 focus-visible:border-[#747c5b]/60 focus-visible:ring-[#747c5b]/30"
               />
             </div>
             <div className="grid gap-2">
               <Label
                 htmlFor="join-code"
-                className="text-xs tracking-[0.22em] text-white/55 uppercase"
+                className="font-type text-[11px] tracking-[0.22em] text-[#898675] uppercase"
               >
                 Room code
               </Label>
@@ -603,15 +612,15 @@ export default function Landing() {
                 }
                 placeholder="ABX729"
                 maxLength={6}
-                className="font-display h-12 rounded-xl border-white/15 bg-white/5 text-center text-2xl tracking-[0.45em] uppercase placeholder:text-white/20 focus-visible:border-primary/60 focus-visible:ring-primary/40"
+                className="font-display h-12 rounded-md border-[#c0bba1]/16 bg-[#11120f]/60 text-center text-2xl tracking-[0.45em] text-[#c0bba1] uppercase placeholder:text-[#898675]/40 focus-visible:border-[#747c5b]/60 focus-visible:ring-[#747c5b]/30"
               />
             </div>
-            {error && <p className="text-sm text-[#ff7a55]">{error}</p>}
+            {error && <p className="text-sm text-[#c08a6e]">{error}</p>}
             <DialogFooter className="gap-2 pt-1">
               <Button
                 type="submit"
                 disabled={busy || name.trim().length === 0 || code.length < 6}
-                className="h-12 w-full rounded-xl border-primary/50 bg-primary/10 text-base font-semibold text-primary hover:bg-primary/20"
+                className="lift font-display h-12 w-full rounded-md border border-[#c0bba1]/25 bg-[#30372a]/60 text-lg tracking-[0.18em] text-[#c0bba1] hover:border-[#747c5b]/60 hover:bg-[#30372a]"
               >
                 {busy ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

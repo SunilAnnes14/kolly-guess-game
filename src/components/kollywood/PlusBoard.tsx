@@ -82,7 +82,7 @@ function Arm({ horizontal = false }: { horizontal?: boolean }) {
 
 function Hub() {
   return (
-    <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full border border-primary/50 bg-background shadow-[0_0_24px_rgba(245,197,66,0.35)] sm:h-11 sm:w-11">
+    <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full border border-primary/50 bg-background shadow-[0_0_24px_rgba(116,124,91,0.35)] sm:h-11 sm:w-11">
       <span className="absolute inset-1 rounded-full bg-primary/15 blur-[6px]" />
       <span className="font-display relative mt-0.5 text-xl leading-none text-primary sm:text-2xl">
         +
@@ -177,7 +177,7 @@ function BoardCell({
   const classes = cn(
     "flex w-full flex-col items-center rounded-2xl border px-2 py-2.5 text-center transition-all",
     revealed
-      ? "border-primary/55 bg-primary/[0.09] shadow-[0_0_26px_rgba(245,197,66,0.16)]"
+      ? "border-primary/55 bg-primary/[0.09] shadow-[0_0_26px_rgba(116,124,91,0.16)]"
       : "border-white/12 bg-white/[0.035]",
     selected &&
       !revealed &&

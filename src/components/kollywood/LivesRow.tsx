@@ -98,11 +98,11 @@ export function LivesRow({
                 animate={alive ? "alive" : "dead"}
                 className="pointer-events-none absolute h-1.5 w-1.5 rounded-[2px]"
                 style={{
-                  backgroundColor: sparkIndex % 2 === 0 ? "#f5c542" : "#ff5a2c",
+                  backgroundColor: sparkIndex % 2 === 0 ? "#c0bba1" : "#8a5138",
                   boxShadow:
                     sparkIndex % 2 === 0
-                      ? "0 0 8px rgba(245,197,66,0.8)"
-                      : "0 0 8px rgba(255,90,44,0.8)",
+                      ? "0 0 8px rgba(116,124,91,0.8)"
+                      : "0 0 8px rgba(138,81,56,0.8)",
                 }}
               />
             ))}

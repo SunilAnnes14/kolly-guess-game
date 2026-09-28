@@ -11,10 +11,15 @@ export function Leaderboard({ room }: { room: RoomState }) {
   const hasScores = ranked.some((p) => p.points > 0 || p.correct > 0);
 
   return (
-    <div className="glass rounded-2xl p-4">
-      <p className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.3em] text-white/55 uppercase">
-        <Trophy className="h-3.5 w-3.5 text-primary" /> Room leaderboard
-      </p>
+    <div className="glass grain rounded-lg p-4">
+      <div className="text-center">
+        <p className="font-display paper-text text-lg tracking-[0.3em]">
+          KOLLYWOOD
+        </p>
+        <p className="font-type mt-1 flex items-center justify-center gap-2 text-[10px] tracking-[0.34em] text-white/45 uppercase">
+          <Trophy className="h-3 w-3 text-[#747c5b]" /> Score board
+        </p>
+      </div>
 
       {!hasScores ? (
         <p className="mt-3 text-xs leading-relaxed text-white/45">
@@ -29,11 +34,11 @@ export function Leaderboard({ room }: { room: RoomState }) {
             >
               <span
                 className={
-                  "font-display w-5 text-center text-xl leading-none " +
-                  (index === 0 ? "text-primary" : "text-white/45")
+                  "font-type w-6 text-center text-sm leading-none " +
+                  (index === 0 ? "text-[#c0bba1]" : "text-white/35")
                 }
               >
-                {index + 1}
+                {String(index + 1).padStart(2, "0")}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-white/90">

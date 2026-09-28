@@ -57,7 +57,7 @@ export function CopyButton({
       className={cn(
         "transition-all",
         copied &&
-          "border-primary/60 text-primary shadow-[0_0_18px_rgba(245,197,66,0.25)]",
+          "border-primary/60 text-primary shadow-[0_0_18px_rgba(116,124,91,0.25)]",
         className,
       )}
     >

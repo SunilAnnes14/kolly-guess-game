@@ -1,3 +1,4 @@
+import { PaperFlash } from "@/components/cinema/CinemaDecor";
 import { GuessCard } from "@/components/kollywood/GuessCard";
 import { Leaderboard } from "@/components/kollywood/Leaderboard";
 import { LivesRow } from "@/components/kollywood/LivesRow";
@@ -108,7 +109,7 @@ function RoundBanner({
   return (
     <div className="flex flex-wrap items-center justify-center gap-2">
       {room.isShowdown ? (
-        <span className="rounded-full border border-[#ff7a55]/45 bg-[#ff7a55]/10 px-2.5 py-1 text-[9px] font-semibold tracking-[0.18em] text-[#ff7a55] uppercase">
+        <span className="rounded-full border border-[#c08a6e]/45 bg-[#c08a6e]/10 px-2.5 py-1 text-[9px] font-semibold tracking-[0.18em] text-[#c08a6e] uppercase">
           ⚡ Final showdown
         </span>
       ) : (
@@ -165,7 +166,7 @@ function StatusPill({
   }
   if (status === "failed") {
     return (
-      <span className="flex items-center gap-1 rounded-full bg-destructive/20 px-2 py-0.5 text-[9px] font-bold tracking-[0.14em] text-[#ff7a55] uppercase">
+      <span className="flex items-center gap-1 rounded-full bg-destructive/20 px-2 py-0.5 text-[9px] font-bold tracking-[0.14em] text-[#c08a6e] uppercase">
         <X className="h-3 w-3" /> Failed
       </span>
     );
@@ -232,7 +233,7 @@ function AwaitingOthers({ room }: { room: RoomState }) {
                   : "border-white/[0.07] bg-white/[0.02]",
               )}
             >
-              <span className="font-display grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#ff5a2c]/70 text-xs text-black">
+              <span className="font-display grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#8a5138]/70 text-xs text-black">
                 {entry.playerName.charAt(0).toUpperCase()}
               </span>
               <span className="min-w-0 flex-1 truncate text-sm text-white/90">
@@ -249,7 +250,7 @@ function AwaitingOthers({ room }: { room: RoomState }) {
                 </span>
               )}
               {found === 3 && entry.status === "playing" && (
-                <span className="shrink-0 text-[11px] tracking-wide text-[#ff7a55]">
+                <span className="shrink-0 text-[11px] tracking-wide text-[#c08a6e]">
                   🔥 close!
                 </span>
               )}
@@ -283,6 +284,12 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
   const [impact, setImpact] = useState<{ category: Category; id: number } | null>(
     null,
   );
+  const [flash, setFlash] = useState<{
+    id: number;
+    title: string;
+    subtitle: string;
+  } | null>(null);
+  const previousStatus = useRef(entry?.status);
 
   const revealed = entry?.revealed ?? {
     hero: false,
@@ -327,6 +334,20 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
     previousLives.current = lives;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry?.lives]);
+
+  // A vintage camera flash the moment my own board is fully cracked.
+  useEffect(() => {
+    if (entry?.status === "solved" && previousStatus.current !== "solved") {
+      setFlash({
+        id: Date.now(),
+        title: "SOLVED",
+        subtitle: entry.placement
+          ? `${medalFor(entry.placement) ?? "🏁"} ${placementLabel(entry.placement)} · +${entry.score} pts`
+          : `+${entry.score} pts`,
+      });
+    }
+    previousStatus.current = entry?.status;
+  }, [entry?.status, entry?.placement, entry?.score]);
 
   // Late arrivals have no board for a question that's already live.
   if (!entry || !question) {
@@ -383,7 +404,16 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
 
   return (
     <>
-      <div className="glass-deep relative overflow-hidden rounded-3xl px-3 py-6 sm:px-8 sm:py-8">
+      {flash && (
+        <PaperFlash
+          key={flash.id}
+          title={flash.title}
+          subtitle={flash.subtitle}
+          onDone={() => setFlash(null)}
+        />
+      )}
+
+      <div className="glass-deep grain relative overflow-hidden rounded-3xl px-3 py-6 sm:px-8 sm:py-8">
         <RoundBanner room={room}>
           {playing ? (
             <span className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-[9px] font-semibold tracking-[0.16em] text-primary uppercase">
@@ -411,7 +441,7 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
             className={cn(
               "text-[11px] font-semibold tracking-[0.3em] uppercase sm:text-xs",
               entry.lives <= 3
-                ? "animate-pulse text-[#ff7a55]"
+                ? "animate-pulse text-[#c08a6e]"
                 : "text-primary/80",
             )}
           >
@@ -455,17 +485,17 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
             </div>
           </motion.div>
         ) : entry.clueRequested ? (
-          <div className="mt-6 flex items-center justify-center gap-2 rounded-2xl border border-[#ffd76e]/35 bg-[#ffd76e]/[0.07] px-4 py-3 text-center text-xs text-white/60">
-            <Clock3 className="h-3.5 w-3.5 text-[#ffd76e]" />
+          <div className="mt-6 flex items-center justify-center gap-2 rounded-2xl border border-[#c0bba1]/35 bg-[#c0bba1]/[0.07] px-4 py-3 text-center text-xs text-white/60">
+            <Clock3 className="h-3.5 w-3.5 text-[#c0bba1]" />
             Clue requested — waiting for {room.creatorName} to answer.
           </div>
         ) : entry.canRequestClue ? (
           <motion.div
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-6 flex flex-col items-center gap-2.5 rounded-2xl border border-[#ffd76e]/40 bg-[#ffd76e]/10 px-4 py-4 text-center"
+            className="mt-6 flex flex-col items-center gap-2.5 rounded-2xl border border-[#c0bba1]/40 bg-[#c0bba1]/10 px-4 py-4 text-center"
           >
-            <p className="text-[11px] font-semibold tracking-[0.3em] text-[#ffd76e] uppercase">
+            <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c0bba1] uppercase">
               💡 Clue available
             </p>
             <p className="text-xs text-white/55">
@@ -476,7 +506,7 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
               type="button"
               onClick={handleClueRequest}
               disabled={clueBusy}
-              className="flex h-10 items-center gap-1.5 rounded-xl bg-[#ffd76e] px-5 text-sm font-semibold text-black transition-all hover:-translate-y-0.5 disabled:opacity-55"
+              className="flex h-10 items-center gap-1.5 rounded-xl bg-[#c0bba1] px-5 text-sm font-semibold text-black transition-all hover:-translate-y-0.5 disabled:opacity-55"
             >
               {clueBusy ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -534,7 +564,7 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
                     className={cn(
                       "kolly-cta flex h-14 items-center justify-center gap-2 rounded-2xl px-8 text-base font-semibold tracking-wide transition-all",
                       text.trim() && selected
-                        ? "bg-primary text-primary-foreground shadow-[0_10px_34px_rgba(245,197,66,0.3)] hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(245,197,66,0.45)] active:translate-y-0"
+                        ? "bg-primary text-primary-foreground shadow-[0_10px_34px_rgba(116,124,91,0.3)] hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(116,124,91,0.45)] active:translate-y-0"
                         : "cursor-not-allowed border border-white/10 bg-white/[0.04] text-white/35",
                     )}
                   >
@@ -591,7 +621,7 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
               animate={{ opacity: 1, scale: 1 }}
               className="rounded-2xl border border-destructive/40 bg-destructive/[0.08] px-4 py-6 text-center"
             >
-              <p className="font-display text-3xl tracking-[0.12em] text-[#ff7a55] text-glow-ember">
+              <p className="font-display text-3xl tracking-[0.12em] text-[#c08a6e] text-glow-ember">
                 🎞️ OUT OF CHANCES
               </p>
               <p className="mt-2 text-sm text-white/65">
@@ -604,7 +634,7 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
           )}
 
           {error && (
-            <p className="mt-3 text-center text-sm text-[#ff7a55]">{error}</p>
+            <p className="mt-3 text-center text-sm text-[#c08a6e]">{error}</p>
           )}
         </div>
       </div>
@@ -652,7 +682,7 @@ function CategoryButton({
         found
           ? "cursor-default border-primary/35 bg-primary/[0.07] text-primary/70"
           : active
-            ? "-translate-y-0.5 border-primary/70 bg-primary/15 text-primary shadow-[0_8px_24px_rgba(245,197,66,0.2)]"
+            ? "-translate-y-0.5 border-primary/70 bg-primary/15 text-primary shadow-[0_8px_24px_rgba(116,124,91,0.2)]"
             : "border-white/12 bg-white/[0.04] text-white/70 hover:-translate-y-0.5 hover:border-primary/45 hover:text-white",
       )}
     >
@@ -690,7 +720,7 @@ function CreatorPanel({ room, token }: { room: RoomState; token: string }) {
 
   return (
     <>
-      <div className="glass-deep relative overflow-hidden rounded-3xl px-3 py-6 sm:px-8 sm:py-8">
+      <div className="glass-deep grain relative overflow-hidden rounded-3xl px-3 py-6 sm:px-8 sm:py-8">
         <RoundBanner room={room}>
           <span className="rounded-full border border-primary/35 bg-primary/10 px-2.5 py-1 text-[9px] font-semibold tracking-[0.16em] text-primary uppercase">
             👑 you judge
@@ -741,7 +771,7 @@ function CreatorPanel({ room, token }: { room: RoomState; token: string }) {
               )}
             >
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-display grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#ff5a2c]/70 text-sm text-black">
+                <span className="font-display grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#8a5138]/70 text-sm text-black">
                   {entry.playerName.charAt(0).toUpperCase()}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white/90">
@@ -792,7 +822,7 @@ function CreatorPanel({ room, token }: { room: RoomState; token: string }) {
                       type="button"
                       disabled={busyId === entry.pending.id}
                       onClick={() => judge(entry.pending!.id, true)}
-                      className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-[0_8px_26px_rgba(245,197,66,0.3)] transition-all hover:-translate-y-0.5 disabled:opacity-60"
+                      className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-[0_8px_26px_rgba(116,124,91,0.3)] transition-all hover:-translate-y-0.5 disabled:opacity-60"
                     >
                       {busyId === entry.pending.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -806,7 +836,7 @@ function CreatorPanel({ room, token }: { room: RoomState; token: string }) {
                       type="button"
                       disabled={busyId === entry.pending.id}
                       onClick={() => judge(entry.pending!.id, false)}
-                      className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-destructive/55 bg-destructive/10 text-sm font-semibold text-[#ff7a55] transition-all hover:-translate-y-0.5 hover:bg-destructive/20 disabled:opacity-60"
+                      className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-destructive/55 bg-destructive/10 text-sm font-semibold text-[#c08a6e] transition-all hover:-translate-y-0.5 hover:bg-destructive/20 disabled:opacity-60"
                     >
                       <X className="h-4 w-4" /> WRONG
                     </button>
@@ -838,7 +868,7 @@ function CreatorPanel({ room, token }: { room: RoomState; token: string }) {
         </ul>
 
         {error && (
-          <p className="mt-4 text-center text-sm text-[#ff7a55]">{error}</p>
+          <p className="mt-4 text-center text-sm text-[#c08a6e]">{error}</p>
         )}
       </div>
 
@@ -906,9 +936,9 @@ function ClueForm({
       onSubmit={handleSubmit}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mt-3 rounded-xl border border-[#ffd76e]/40 bg-[#ffd76e]/10 px-3.5 py-3"
+      className="mt-3 rounded-xl border border-[#c0bba1]/40 bg-[#c0bba1]/10 px-3.5 py-3"
     >
-      <p className="text-[10px] font-semibold tracking-[0.26em] text-[#ffd76e] uppercase">
+      <p className="text-[10px] font-semibold tracking-[0.26em] text-[#c0bba1] uppercase">
         💡 {entry.playerName} asked for a clue
       </p>
       <p className="mt-1 text-[11px] text-white/50">
@@ -924,8 +954,8 @@ function ClueForm({
             className={cn(
               "rounded-full border px-2.5 py-1 text-[11px] transition-all",
               category === c
-                ? "border-[#ffd76e] bg-[#ffd76e]/20 text-[#ffd76e]"
-                : "border-white/15 text-white/60 hover:border-[#ffd76e]/50 hover:text-white",
+                ? "border-[#c0bba1] bg-[#c0bba1]/20 text-[#c0bba1]"
+                : "border-white/15 text-white/60 hover:border-[#c0bba1]/50 hover:text-white",
             )}
           >
             {CATEGORY_META[c].icon} {CATEGORY_META[c].label}
@@ -939,12 +969,12 @@ function ClueForm({
           onChange={(e) => setText(e.target.value)}
           placeholder="This one released in 2004…"
           maxLength={140}
-          className="h-10 flex-1 rounded-xl border-white/15 bg-white/5 text-sm placeholder:text-white/30 focus-visible:border-[#ffd76e]/60 focus-visible:ring-[#ffd76e]/30"
+          className="h-10 flex-1 rounded-xl border-white/15 bg-white/5 text-sm placeholder:text-white/30 focus-visible:border-[#c0bba1]/60 focus-visible:ring-[#c0bba1]/30"
         />
         <button
           type="submit"
           disabled={busy || !text.trim()}
-          className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[#ffd76e] px-4 text-sm font-semibold text-black transition-all hover:-translate-y-0.5 disabled:opacity-55"
+          className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[#c0bba1] px-4 text-sm font-semibold text-black transition-all hover:-translate-y-0.5 disabled:opacity-55"
         >
           {busy ? (
             <Loader2 className="h-4 w-4 animate-spin" />

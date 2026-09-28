@@ -191,7 +191,7 @@ export function QuestionCreator({
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
-                  className="absolute inset-x-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-white/12 bg-[#14102a]/95 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                  className="absolute inset-x-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-white/12 bg-[#1b1c17]/95 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl"
                 >
                   {results.map((entry) => (
                     <li key={`${entry.movie}-${entry.year}`}>
@@ -279,7 +279,7 @@ export function QuestionCreator({
             ))}
           </div>
 
-          {error && <p className="mt-4 text-sm text-[#ff7a55]">{error}</p>}
+          {error && <p className="mt-4 text-sm text-[#c08a6e]">{error}</p>}
 
           <button
             type="submit"
@@ -287,7 +287,7 @@ export function QuestionCreator({
             className={
               "kolly-cta mt-5 flex h-14 w-full items-center justify-center gap-2.5 rounded-2xl text-base font-semibold tracking-wide transition-all " +
               (filled
-                ? "bg-primary text-primary-foreground shadow-[0_10px_34px_rgba(245,197,66,0.3)] hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(245,197,66,0.45)] active:translate-y-0"
+                ? "bg-primary text-primary-foreground shadow-[0_10px_34px_rgba(116,124,91,0.3)] hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(116,124,91,0.45)] active:translate-y-0"
                 : "cursor-not-allowed border border-white/10 bg-white/[0.04] text-white/35")
             }
           >

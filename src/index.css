@@ -40,84 +40,110 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Retro palette — AGED PAPER stands in for pure white across the whole app,
+     BURNT BLACK stands in for pure black. This single override turns every
+     `text-white/*`, `bg-white/*` and `border-white/*` utility into warm paper. */
+  --color-white: #c0bba1;
+  --color-black: #11120f;
+
+  /* Named KOLLYWOOD tokens, usable as Tailwind colours (bg-olive, text-paper…). */
+  --color-paper: #c0bba1;
+  --color-paper-bright: #e7e3d2;
+  --color-paper-dim: #898675;
+  --color-olive: #596344;
+  --color-olive-soft: #747c5b;
+  --color-olive-deep: #30372a;
+  --color-charcoal: #1b1c17;
+  --color-burnt: #11120f;
+  --color-earth: #29251c;
+  --color-rust: #8a5138;
+  --color-rust-soft: #c08a6e;
 }
 
-/* CHANGE VALUES FOR THEME — KOLLYWOOD: deep black theatre, midnight violet,
-   warm marquee gold, red-orange ember accents. */
+/* CHANGE VALUES FOR THEME — KOLLYWOOD runs on a dark retro cinema palette:
+   burnt black, deep charcoal, dark olive, muted olive and aged paper.
+   No gold, no neon. */
 :root {
-  --radius: 0.75rem;
-  --background: oklch(0.125 0.018 278); /* deep charcoal-violet */
-  --foreground: oklch(0.97 0.005 85); /* warm white */
-  --card: oklch(0.163 0.024 280);
-  --card-foreground: oklch(0.97 0.005 85);
-  --popover: oklch(0.163 0.024 280);
-  --popover-foreground: oklch(0.97 0.005 85);
-  --primary: oklch(0.8 0.135 78); /* marquee gold */
-  --primary-foreground: oklch(0.16 0.03 78); /* ink on gold */
-  --secondary: oklch(0.235 0.03 282); /* midnight violet surface */
-  --secondary-foreground: oklch(0.97 0.005 85);
-  --muted: oklch(0.21 0.024 280);
-  --muted-foreground: oklch(0.665 0.02 280);
-  --accent: oklch(0.26 0.035 285);
-  --accent-foreground: oklch(0.97 0.005 85);
-  --destructive: oklch(0.63 0.21 27); /* ember red-orange */
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.8 0.135 78);
-  --chart-1: oklch(0.8 0.135 78);
-  --chart-2: oklch(0.63 0.21 27);
-  --chart-3: oklch(0.55 0.16 295);
-  --chart-4: oklch(0.72 0.15 55);
-  --chart-5: oklch(0.6 0.12 200);
-  --sidebar: oklch(0.163 0.024 280);
-  --sidebar-foreground: oklch(0.97 0.005 85);
-  --sidebar-primary: oklch(0.8 0.135 78);
-  --sidebar-primary-foreground: oklch(0.16 0.03 78);
-  --sidebar-accent: oklch(0.235 0.03 282);
-  --sidebar-accent-foreground: oklch(0.97 0.005 85);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.8 0.135 78);
+  --radius: 0.4rem;
+  --background: #11120f; /* burnt black */
+  --foreground: #c0bba1; /* aged paper */
+  --card: #1b1c17; /* deep charcoal */
+  --card-foreground: #c0bba1;
+  --popover: #1b1c17;
+  --popover-foreground: #c0bba1;
+  --primary: #596344; /* muted olive */
+  --primary-foreground: #e7e3d2; /* bright aged paper ink */
+  --secondary: #30372a; /* dark olive surface */
+  --secondary-foreground: #c0bba1;
+  --muted: #23251c;
+  --muted-foreground: #898675; /* faded paper */
+  --accent: #30372a;
+  --accent-foreground: #c0bba1;
+  --destructive: #8a5138; /* muted dark rust — never bright red */
+  --border: rgb(192 187 161 / 13%);
+  --input: rgb(192 187 161 / 16%);
+  --ring: #747c5b; /* faded olive */
+  --chart-1: #747c5b;
+  --chart-2: #596344;
+  --chart-3: #c0bba1;
+  --chart-4: #8a5138;
+  --chart-5: #898675;
+  --sidebar: #1b1c17;
+  --sidebar-foreground: #c0bba1;
+  --sidebar-primary: #596344;
+  --sidebar-primary-foreground: #e7e3d2;
+  --sidebar-accent: #30372a;
+  --sidebar-accent-foreground: #c0bba1;
+  --sidebar-border: rgb(192 187 161 / 13%);
+  --sidebar-ring: #747c5b;
 
   /* Named brand colours (usable via var()) */
-  --kolly-gold: #f5c542;
-  --kolly-gold-bright: #ffe9a8;
-  --kolly-ember: #ff5a2c;
-  --kolly-violet: #7c5cff;
-  --kolly-midnight: #14102a;
+  --kolly-paper: #c0bba1;
+  --kolly-paper-bright: #e7e3d2;
+  --kolly-paper-dim: #898675;
+  --kolly-olive: #596344;
+  --kolly-olive-soft: #747c5b;
+  --kolly-olive-deep: #30372a;
+  --kolly-charcoal: #1b1c17;
+  --kolly-black: #11120f;
+  --kolly-earth: #29251c;
+  --kolly-rust: #8a5138;
+  --kolly-rust-soft: #c08a6e;
 }
 
 .dark {
-  --background: oklch(0.125 0.018 278);
-  --foreground: oklch(0.97 0.005 85);
-  --card: oklch(0.163 0.024 280);
-  --card-foreground: oklch(0.97 0.005 85);
-  --popover: oklch(0.163 0.024 280);
-  --popover-foreground: oklch(0.97 0.005 85);
-  --primary: oklch(0.8 0.135 78);
-  --primary-foreground: oklch(0.16 0.03 78);
-  --secondary: oklch(0.235 0.03 282);
-  --secondary-foreground: oklch(0.97 0.005 85);
-  --muted: oklch(0.21 0.024 280);
-  --muted-foreground: oklch(0.665 0.02 280);
-  --accent: oklch(0.26 0.035 285);
-  --accent-foreground: oklch(0.97 0.005 85);
-  --destructive: oklch(0.63 0.21 27);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.8 0.135 78);
-  --chart-1: oklch(0.8 0.135 78);
-  --chart-2: oklch(0.63 0.21 27);
-  --chart-3: oklch(0.55 0.16 295);
-  --chart-4: oklch(0.72 0.15 55);
-  --chart-5: oklch(0.6 0.12 200);
-  --sidebar: oklch(0.163 0.024 280);
-  --sidebar-foreground: oklch(0.97 0.005 85);
-  --sidebar-primary: oklch(0.8 0.135 78);
-  --sidebar-primary-foreground: oklch(0.16 0.03 78);
-  --sidebar-accent: oklch(0.235 0.03 282);
-  --sidebar-accent-foreground: oklch(0.97 0.005 85);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.8 0.135 78);
+  --background: #11120f;
+  --foreground: #c0bba1;
+  --card: #1b1c17;
+  --card-foreground: #c0bba1;
+  --popover: #1b1c17;
+  --popover-foreground: #c0bba1;
+  --primary: #596344;
+  --primary-foreground: #e7e3d2;
+  --secondary: #30372a;
+  --secondary-foreground: #c0bba1;
+  --muted: #23251c;
+  --muted-foreground: #898675;
+  --accent: #30372a;
+  --accent-foreground: #c0bba1;
+  --destructive: #8a5138;
+  --border: rgb(192 187 161 / 13%);
+  --input: rgb(192 187 161 / 16%);
+  --ring: #747c5b;
+  --chart-1: #747c5b;
+  --chart-2: #596344;
+  --chart-3: #c0bba1;
+  --chart-4: #8a5138;
+  --chart-5: #898675;
+  --sidebar: #1b1c17;
+  --sidebar-foreground: #c0bba1;
+  --sidebar-primary: #596344;
+  --sidebar-primary-foreground: #e7e3d2;
+  --sidebar-accent: #30372a;
+  --sidebar-accent-foreground: #c0bba1;
+  --sidebar-border: rgb(192 187 161 / 13%);
+  --sidebar-ring: #747c5b;
 }
 
 @layer base {
@@ -136,8 +162,8 @@
     text-rendering: optimizeLegibility;
   }
   ::selection {
-    background: rgb(245 197 66 / 0.85);
-    color: #17110a;
+    background: rgb(116 124 91 / 0.55);
+    color: #e7e3d2;
   }
   button:not([disabled]),
   [role="button"]:not([disabled]) {
@@ -150,61 +176,195 @@
 
 @layer components {
   .font-display {
-    font-family: "Bebas Neue", "Noto Sans Tamil", Impact, sans-serif;
-    letter-spacing: 0.06em;
+    font-family: "Bebas Neue", "Noto Sans Tamil", Impact, "Haettenschweiler",
+      sans-serif;
+    letter-spacing: 0.08em;
   }
 
-  .gold-text {
+  /* Typewriter face for metadata, tickets and credits. */
+  .font-type {
+    font-family: "Special Elite", "Courier New", ui-monospace, monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* ==== Typography ==== */
+
+  /* Legacy name, now rendered as AGED PAPER — never gold. */
+  .gold-text,
+  .paper-text {
     background: linear-gradient(
       180deg,
-      var(--kolly-gold-bright) 0%,
-      var(--kolly-gold) 48%,
-      #d99a12 100%
+      var(--kolly-paper-bright) 0%,
+      var(--kolly-paper) 55%,
+      #a19d86 100%
     );
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
   }
+
+  .paper-ink {
+    color: var(--kolly-paper);
+  }
+  .paper-soft {
+    color: var(--kolly-paper-dim);
+  }
+  .olive-ink {
+    color: var(--kolly-olive-soft);
+  }
+
+  /* Legacy glow names now render a soft, matte printed shadow — no light. */
+  .text-glow-gold,
+  .text-glow-ember,
+  .text-lift {
+    filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.55))
+      drop-shadow(0 12px 24px rgba(0, 0, 0, 0.45));
+  }
+
+  /* ==== Surfaces ==== */
 
   .glass {
     background: linear-gradient(
-      160deg,
-      rgb(255 255 255 / 0.055),
-      rgb(255 255 255 / 0.02)
+      165deg,
+      rgb(48 55 42 / 0.55),
+      rgb(27 28 23 / 0.72)
     );
-    border: 1px solid rgb(255 255 255 / 0.09);
-    backdrop-filter: blur(14px);
+    border: 1px solid rgb(192 187 161 / 0.12);
+    backdrop-filter: blur(10px);
   }
 
   .glass-deep {
     background: linear-gradient(
-      160deg,
-      rgb(20 16 42 / 0.72),
-      rgb(10 9 16 / 0.86)
+      165deg,
+      rgb(27 28 23 / 0.92),
+      rgb(17 18 15 / 0.96)
     );
-    border: 1px solid rgb(255 255 255 / 0.1);
-    backdrop-filter: blur(18px);
+    border: 1px solid rgb(192 187 161 / 0.14);
+    backdrop-filter: blur(12px);
   }
 
+  /* Aged-paper panel — for answers, tickets and title cards. */
+  .paper-panel {
+    background:
+      linear-gradient(160deg, rgb(192 187 161 / 0.08), rgb(41 37 28 / 0.35)),
+      linear-gradient(#1b1c17, #1b1c17);
+    border: 1px solid rgb(192 187 161 / 0.2);
+  }
+
+  /* A ticket stub: notched left/right edges plus a perforation line. */
+  .ticket-card {
+    position: relative;
+    background: linear-gradient(160deg, #22241c, #171812);
+    border: 1px solid rgb(192 187 161 / 0.16);
+  }
+  .ticket-card::before,
+  .ticket-card::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 12px;
+    background-image: radial-gradient(
+      circle,
+      var(--kolly-black) 3px,
+      transparent 3.6px
+    );
+    background-size: 12px 15px;
+    background-repeat: repeat-y;
+    background-position: center;
+    pointer-events: none;
+  }
+  .ticket-card::before {
+    left: -6px;
+  }
+  .ticket-card::after {
+    right: -6px;
+  }
+
+  .olive-rule,
   .gold-rule {
     height: 1px;
     background: linear-gradient(
       90deg,
       transparent,
-      rgb(245 197 66 / 0.55),
+      rgb(116 124 91 / 0.6),
       transparent
     );
   }
 
-  .text-glow-gold {
-    filter: drop-shadow(0 0 12px rgb(245 197 66 / 0.35));
+  .paper-rule {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(192 187 161 / 0.4),
+      transparent
+    );
   }
 
-  .text-glow-ember {
-    filter: drop-shadow(0 0 12px rgb(255 90 44 / 0.4));
+  /* ==== Textures ==== */
+
+  /* Film grain — layered over sections via ::after. */
+  .grain {
+    position: relative;
+  }
+  .grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.5;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E");
   }
 
-  /* Cinematic sweep highlight for primary actions */
+  .vignette {
+    background: radial-gradient(
+      ellipse at center,
+      transparent 42%,
+      rgba(0, 0, 0, 0.62) 100%
+    );
+  }
+
+  /* Perforation strip: aged-paper dots down one edge of the screen. */
+  .perf-rail {
+    background-image: radial-gradient(
+      circle,
+      rgb(192 187 161 / 0.22) 2.2px,
+      transparent 2.8px
+    );
+    background-size: 100% 16px;
+    background-repeat: repeat-y;
+  }
+
+  /* ==== Cinema graphics ==== */
+
+  /* Projector beam cone — dark olive/paper, never white or neon. */
+  .beam-cone {
+    background: linear-gradient(
+      to bottom,
+      rgb(192 187 161 / 0.1) 0%,
+      rgb(116 124 91 / 0.06) 45%,
+      transparent 100%
+    );
+    clip-path: polygon(46% 0, 54% 0, 100% 100%, 0% 100%);
+    filter: blur(10px);
+  }
+
+  .beam-cone-right {
+    background: linear-gradient(
+      to bottom,
+      rgb(192 187 161 / 0.09) 0%,
+      rgb(89 99 68 / 0.06) 45%,
+      transparent 100%
+    );
+    clip-path: polygon(46% 0, 54% 0, 100% 100%, 0% 100%);
+    filter: blur(14px);
+  }
+
+  /* Aged-paper sweep highlight for primary actions. */
   .kolly-cta {
     position: relative;
     isolation: isolate;
@@ -218,7 +378,7 @@
     background: linear-gradient(
       120deg,
       transparent 20%,
-      rgb(255 255 255 / 0.35) 50%,
+      rgb(192 187 161 / 0.18) 50%,
       transparent 80%
     );
     transform: translateX(-120%);
@@ -228,47 +388,87 @@
     transform: translateX(120%);
   }
 
-  /* Sprocket-holed film strip used across landing + room */
+  /* Sprocket-holed film strip used across landing + room. */
   .film-strip {
     background-image: repeating-linear-gradient(
         90deg,
-        rgb(255 255 255 / 0.22) 0 12px,
-        transparent 12px 30px
+        rgb(192 187 161 / 0.28) 0 11px,
+        transparent 11px 28px
       ),
       repeating-linear-gradient(
         90deg,
-        rgb(255 255 255 / 0.22) 0 12px,
-        transparent 12px 30px
+        rgb(192 187 161 / 0.28) 0 11px,
+        transparent 11px 28px
       ),
       repeating-linear-gradient(
         90deg,
-        rgb(255 255 255 / 0.05) 0 70px,
-        transparent 70px 78px
+        rgb(192 187 161 / 0.05) 0 64px,
+        transparent 64px 72px
       ),
-      linear-gradient(180deg, rgb(12 10 20 / 0.85), rgb(20 16 42 / 0.65));
+      linear-gradient(180deg, rgb(17 18 15 / 0.92), rgb(48 55 42 / 0.7));
     background-size:
       100% 8px,
       100% 8px,
-      100% calc(100% - 24px),
+      100% calc(100% - 22px),
       100% 100%;
     background-position:
-      0 5px,
-      0 calc(100% - 5px),
-      0 12px,
+      0 4px,
+      0 calc(100% - 4px),
+      0 11px,
       0 0;
     background-repeat: repeat-x, repeat-x, repeat-x, no-repeat;
   }
 
+  /* Vertical film strip for the screen edges. */
+  .film-strip-v {
+    background-image: repeating-linear-gradient(
+        180deg,
+        rgb(192 187 161 / 0.24) 0 11px,
+        transparent 11px 28px
+      ),
+      repeating-linear-gradient(
+        180deg,
+        rgb(192 187 161 / 0.24) 0 11px,
+        transparent 11px 28px
+      ),
+      linear-gradient(90deg, rgb(17 18 15 / 0.92), rgb(48 55 42 / 0.7));
+    background-size:
+      8px 100%,
+      8px 100%,
+      calc(100% - 22px) 100%;
+    background-position:
+      4px 0,
+      calc(100% - 4px) 0,
+      11px 0;
+    background-repeat: repeat-y, repeat-y, no-repeat;
+  }
+
   .animate-strip {
-    animation: kolly-scroll 2.2s linear infinite;
+    animation: kolly-scroll 2.6s linear infinite;
+  }
+
+  .animate-strip-v {
+    animation: kolly-scroll-v 2.6s linear infinite;
   }
 
   .animate-float {
     animation: kolly-float 7s ease-in-out infinite;
   }
 
+  .animate-drift {
+    animation: kolly-drift 14s ease-in-out infinite;
+  }
+
   .animate-flicker {
-    animation: kolly-flicker 6s ease-in-out infinite;
+    animation: kolly-flicker 7s ease-in-out infinite;
+  }
+
+  .animate-reel {
+    animation: kolly-reel 26s linear infinite;
+  }
+
+  .animate-reel-slow {
+    animation: kolly-reel 44s linear infinite;
   }
 
   .animate-shake {
@@ -276,24 +476,68 @@
   }
 
   .animate-sweep {
-    animation: kolly-sweep 2.6s ease-in-out infinite;
+    animation: kolly-sweep 3.2s ease-in-out infinite;
+  }
+
+  .animate-paper-flash {
+    animation: kolly-paper-flash 0.55s ease-out;
+  }
+
+  .animate-countdown {
+    animation: kolly-countdown 1s ease-out;
+  }
+
+  .animate-rise {
+    animation: kolly-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-dust {
+    animation: kolly-dust 12s linear infinite;
+  }
+
+  /* Physical-feeling hover for cards and buttons. */
+  .lift {
+    transition:
+      transform 0.22s ease,
+      border-color 0.22s ease,
+      background-color 0.22s ease,
+      box-shadow 0.22s ease;
+  }
+  .lift:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
   }
 }
 
 @keyframes kolly-scroll {
   from {
     background-position:
-      0 5px,
-      0 calc(100% - 5px),
-      0 12px,
+      0 4px,
+      0 calc(100% - 4px),
+      0 11px,
       0 0;
   }
   to {
     background-position:
-      -60px 5px,
-      -60px calc(100% - 5px),
-      -60px 12px,
+      -56px 4px,
+      -56px calc(100% - 4px),
+      -56px 11px,
       0 0;
+  }
+}
+
+@keyframes kolly-scroll-v {
+  from {
+    background-position:
+      4px 0,
+      calc(100% - 4px) 0,
+      11px 0;
+  }
+  to {
+    background-position:
+      4px -56px,
+      calc(100% - 4px) -56px,
+      11px 0;
   }
 }
 
@@ -307,28 +551,49 @@
   }
 }
 
+@keyframes kolly-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate3d(12px, -18px, 0);
+    opacity: 0.85;
+  }
+}
+
 @keyframes kolly-flicker {
   0%,
   100% {
     opacity: 1;
   }
-  42% {
+  41% {
     opacity: 1;
   }
-  44% {
-    opacity: 0.55;
+  43% {
+    opacity: 0.62;
   }
-  46% {
+  45% {
     opacity: 1;
   }
-  70% {
+  71% {
     opacity: 1;
   }
-  72% {
-    opacity: 0.7;
+  73% {
+    opacity: 0.74;
   }
-  74% {
+  75% {
     opacity: 1;
+  }
+}
+
+@keyframes kolly-reel {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -360,13 +625,82 @@
   }
 }
 
+/* A vintage camera flash: a brief warm aged-paper bloom, never white. */
+@keyframes kolly-paper-flash {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.62;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes kolly-countdown {
+  0% {
+    opacity: 0;
+    transform: scale(1.5);
+    filter: blur(10px);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+@keyframes kolly-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes kolly-dust {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.5;
+  }
+  80% {
+    opacity: 0.35;
+  }
+  100% {
+    transform: translate3d(-30px, -90px, 0);
+    opacity: 0;
+  }
+}
+
 /* Keep it calm for users who prefer reduced motion — unlayered so it wins. */
 @media (prefers-reduced-motion: reduce) {
   .animate-strip,
+  .animate-strip-v,
   .animate-float,
+  .animate-drift,
   .animate-flicker,
+  .animate-reel,
+  .animate-reel-slow,
   .animate-shake,
-  .animate-sweep {
+  .animate-sweep,
+  .animate-paper-flash,
+  .animate-countdown,
+  .animate-rise,
+  .animate-dust {
     animation: none;
+  }
+  .lift:hover {
+    transform: none;
   }
 }

@@ -30,11 +30,11 @@ export function PlayersPanel({ room }: { room: RoomState }) {
             className={cn(
               "flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors",
               player.isCreator
-                ? "border-primary/50 bg-primary/10 shadow-[0_0_18px_rgba(245,197,66,0.12)]"
+                ? "border-primary/50 bg-primary/10 shadow-[0_0_18px_rgba(116,124,91,0.12)]"
                 : "border-white/[0.07] bg-white/[0.03]",
             )}
           >
-            <span className="font-display grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#ff5a2c]/70 text-xs text-black">
+            <span className="font-display grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#8a5138]/70 text-xs text-black">
               {player.name.charAt(0).toUpperCase()}
             </span>
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/90">

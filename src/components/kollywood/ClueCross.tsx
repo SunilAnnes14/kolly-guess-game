@@ -140,7 +140,7 @@ export function ClueCross({
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.95, type: "spring", stiffness: 260, damping: 14 }}
         >
-          <span className="relative grid h-9 w-9 place-items-center rounded-full border border-primary/50 bg-background shadow-[0_0_24px_rgba(245,197,66,0.35)]">
+          <span className="relative grid h-9 w-9 place-items-center rounded-full border border-primary/50 bg-background shadow-[0_0_24px_rgba(116,124,91,0.35)]">
             <span className="absolute inset-1 rounded-full bg-primary/15 blur-[6px]" />
             <span className="font-display relative mt-0.5 text-xl leading-none text-primary">
               +
