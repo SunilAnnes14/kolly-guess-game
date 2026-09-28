@@ -17,7 +17,7 @@ export const roleValidator = v.union(
 export type Role = Infer<typeof roleValidator>;
 
 // The four independent parts of a KOLLYWOOD question. Every guess and clue is
-// scoped to one of these, and the 9 chances are shared across all of them.
+// scoped to one of these.
 export const categoryValidator = v.union(
   v.literal("hero"),
   v.literal("heroine"),
@@ -26,7 +26,7 @@ export const categoryValidator = v.union(
 );
 export type Category = Infer<typeof categoryValidator>;
 
-/** Which of the four parts have been discovered yet. */
+/** Which of the four parts a player has discovered. */
 export const revealedValidator = v.object({
   hero: v.boolean(),
   heroine: v.boolean(),
@@ -34,6 +34,14 @@ export const revealedValidator = v.object({
   song: v.boolean(),
 });
 export type Revealed = Infer<typeof revealedValidator>;
+
+/** Somebody's progress on the current question. */
+export const progressValidator = v.union(
+  v.literal("playing"), // still guessing
+  v.literal("solved"), // all four parts discovered
+  v.literal("failed"), // ran out of the nine KOLLYWOOD chances
+);
+export type Progress = Infer<typeof progressValidator>;
 
 const schema = defineSchema(
   {
@@ -51,35 +59,32 @@ const schema = defineSchema(
       role: v.optional(roleValidator), // role of the user. do not remove
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
-    // KOLLYWOOD game rooms — one private room per invite code (e.g. /room/ABX729).
+    /**
+     * KOLLYWOOD game rooms — one private room per invite code (e.g. /room/ABX729).
+     *
+     * A game is a rotation: every player writes exactly ONE question, and
+     * everyone else guesses that same question with their own independent nine
+     * chances. `round` walks the rotation; `roundsTotal` is fixed when the
+     * host starts the game.
+     */
     rooms: defineTable({
       code: v.string(),
       status: v.union(
-        v.literal("lobby"), // invite / waiting screen
-        v.literal("creating"), // question creator is filling in the 4 clues
-        v.literal("playing"), // guessing round in progress
-        v.literal("won"), // someone guessed correctly
-        v.literal("over"), // all 9 KOLLYWOOD letters gone
+        v.literal("lobby"), // invite screen, waiting for the host to start
+        v.literal("creating"), // this round's creator is writing the question
+        v.literal("playing"), // the question is live, everyone guesses
+        v.literal("roundComplete"), // everyone finished this question
+        v.literal("finished"), // all rounds played — final leaderboard
       ),
-      // The question creator (also the judge). Seeded after the first player
-      // is inserted, hence nullable.
+      // Who wrote the CURRENT round's question. Null in the lobby.
       creatorId: v.nullable(v.id("players")),
-      // Whose turn it is to guess (null while nobody can guess).
-      currentTurnId: v.nullable(v.id("players")),
-      // The guess waiting for the creator's approval.
-      pendingGuessId: v.nullable(v.id("guesses")),
-      round: v.number(),
-      lives: v.number(), // KOLLYWOOD letters remaining (starts at 9)
-      wrongGuesses: v.number(), // total wrong guesses this round
-      // Which of the four parts the guessers have cracked so far.
-      revealed: revealedValidator,
-      clue: v.string(), // "" = no clue yet, one clue per question
-      clueCategory: v.nullable(categoryValidator), // which part the clue hints at
+      round: v.number(), // 1-based
+      roundsTotal: v.number(), // 0 until the game starts
       question: v.nullable(
         v.object({
           hero: v.string(),
           heroine: v.string(),
-          movie: v.string(), // the answer — never sent to guessers
+          movie: v.string(),
           song: v.string(),
           heroInitial: v.string(),
           heroineInitial: v.string(),
@@ -94,20 +99,45 @@ const schema = defineSchema(
       roomId: v.id("rooms"),
       token: v.string(), // secret kept in the player's browser — identifies them
       name: v.string(),
-      joinedAt: v.number(),
-      correct: v.number(), // correct guesses across rounds
-      attempts: v.number(), // guesses submitted across rounds
-      points: v.number(),
-      cluesUsed: v.number(), // times this player spent a clue as creator
+      joinedAt: v.number(), // also the creator rotation order
+      points: v.number(), // tournament total across every round
+      solves: v.optional(v.number()), // questions fully cracked
+      correct: v.number(), // parts discovered
+      attempts: v.number(), // guesses submitted
+      cluesUsed: v.number(), // clues handed out as creator
     })
       .index("by_room", ["roomId"])
       .index("by_token", ["token"]),
 
-    guesses: defineTable({
+    /**
+     * One row per player per round — that player's OWN nine chances, board and
+     * clue. Nothing here is ever shared with another player.
+     */
+    roundEntries: defineTable({
       roomId: v.id("rooms"),
+      round: v.number(),
       playerId: v.id("players"),
       playerName: v.string(),
+      lives: v.number(), // own KOLLYWOOD letters, starts at 9 every round
+      revealed: revealedValidator, // own discoveries
+      guesses: v.number(), // own guess count
+      clueRequested: v.boolean(),
+      clue: v.string(), // "" = none — only this player ever sees it
+      clueCategory: v.nullable(categoryValidator),
+      status: progressValidator,
+      score: v.number(), // this round's score
+      completedAt: v.nullable(v.number()),
+      createdAt: v.number(),
+    })
+      .index("by_room", ["roomId"])
+      .index("by_room_round", ["roomId", "round"])
+      .index("by_room_round_player", ["roomId", "round", "playerId"]),
+
+    guesses: defineTable({
+      roomId: v.id("rooms"),
       round: v.number(),
+      playerId: v.id("players"),
+      playerName: v.string(),
       category: categoryValidator, // what the player was guessing
       text: v.string(),
       status: v.union(
@@ -116,7 +146,9 @@ const schema = defineSchema(
         v.literal("wrong"),
       ),
       createdAt: v.number(),
-    }).index("by_room_round", ["roomId", "round"])
+    })
+      .index("by_room", ["roomId"])
+      .index("by_room_round", ["roomId", "round"]),
   },
   {
     schemaValidation: false,

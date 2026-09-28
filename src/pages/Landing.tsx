@@ -65,17 +65,17 @@ const STEPS = [
   {
     n: "01",
     title: "Open a private room",
-    body: "Create a room, share the code or link, and your friends walk right into your screening.",
+    body: "Create a room, share the code or link, and your friends walk right into your screening. Everyone writes exactly one question — you go first.",
   },
   {
     n: "02",
     title: "Set the four clues",
-    body: "Hero, heroine, movie and song. Everyone else only ever gets the first letter of each.",
+    body: "Hero, heroine, movie and song. Everyone else only ever gets the first letter of each — and the whole room plays that same puzzle.",
   },
   {
     n: "03",
     title: "Guess, judge, reveal",
-    body: "Players pick one part and guess just that. The creator approves every call — right answers light up the board.",
+    body: "Everyone guesses at the same time with their own nine chances. The creator approves each player's call separately.",
   },
 ];
 
@@ -99,7 +99,12 @@ const LOOP = [
   {
     icon: "🏆",
     title: "Solve all four",
-    body: "Get hero, heroine, movie and song on the board and the round is yours.",
+    body: "Get hero, heroine, movie and song on your board and that round is yours. The quicker the solve, the bigger the score.",
+  },
+  {
+    icon: "🔁",
+    title: "Pass the clapperboard",
+    body: "When everyone finishes, the next player writes a brand-new question. Everyone creates one, everyone guesses the rest — highest total takes the trophy.",
   },
 ];
 
@@ -460,9 +465,10 @@ export default function Landing() {
               <LivesRow lives={6} />
             </div>
             <p className="mx-auto mt-6 max-w-lg text-sm leading-relaxed text-white/65">
-              One shared pool of nine for the whole question — the hero, the
-              heroine, the movie and the song all draw from the same letters.
-              Burn all nine and the film gets away.
+              Every player gets their OWN nine letters for every question. The
+              hero, the heroine, the movie and the song all draw from your own
+              pool — burn all nine and the film gets away while your friends
+              are still guessing.
             </p>
           </motion.div>
         </section>

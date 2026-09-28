@@ -1,11 +1,14 @@
 import { cn } from "@/lib/utils";
 import type { RoomState } from "@/pages/room/types";
 import { motion } from "framer-motion";
-import { Crown, Users } from "lucide-react";
+import { Clapperboard, Crown, Star, Users } from "lucide-react";
 
-/** Players, who's judging, and whose turn it is. */
+/**
+ * The roster. The room host opens the game and takes the first question; after
+ * that the 🎬 badge walks down the join order — one question each.
+ */
 export function PlayersPanel({ room }: { room: RoomState }) {
-  const turn = room.players.find((p) => p.isTurn);
+  const creator = room.players.find((p) => p.isCreator);
 
   return (
     <div className="glass rounded-2xl p-4">
@@ -26,19 +29,14 @@ export function PlayersPanel({ room }: { room: RoomState }) {
             transition={{ delay: Math.min(index * 0.05, 0.3) }}
             className={cn(
               "flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors",
-              player.isTurn
+              player.isCreator
                 ? "border-primary/50 bg-primary/10 shadow-[0_0_18px_rgba(245,197,66,0.12)]"
                 : "border-white/[0.07] bg-white/[0.03]",
             )}
           >
-            <span
-              className={cn(
-                "h-2 w-2 shrink-0 rounded-full",
-                player.isTurn
-                  ? "bg-primary shadow-[0_0_10px_rgba(245,197,66,0.9)]"
-                  : "bg-white/35",
-              )}
-            />
+            <span className="font-display grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#ff5a2c]/70 text-xs text-black">
+              {player.name.charAt(0).toUpperCase()}
+            </span>
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/90">
               {player.name}
               {player.id === room.me?.id && (
@@ -47,37 +45,40 @@ export function PlayersPanel({ room }: { room: RoomState }) {
                 </span>
               )}
             </span>
-            {player.isCreator && (
-              <Crown
-                className="h-3.5 w-3.5 shrink-0 text-primary"
-                aria-label="Question creator"
+            {player.isHost && (
+              <Star
+                className="h-3.5 w-3.5 shrink-0 text-white/40"
+                aria-label="Room host"
               />
             )}
-            {player.isTurn && (
-              <span className="animate-pulse text-[10px] font-semibold tracking-[0.18em] text-primary uppercase">
-                Turn
-              </span>
-            )}
+            {player.isCreator ? (
+              <Clapperboard
+                className="h-3.5 w-3.5 shrink-0 text-primary"
+                aria-label="Wrote this question"
+              />
+            ) : null}
+            <span className="font-display shrink-0 text-lg leading-none gold-text">
+              {player.points}
+            </span>
           </motion.li>
         ))}
       </ul>
 
       <div className="mt-3 border-t border-white/10 pt-3 text-center">
-        {room.status === "playing" ? (
+        {room.roundsTotal > 0 ? (
           <p className="text-xs tracking-wide text-white/60">
-            🎯 Current turn:{" "}
-            {room.myTurn ? (
-              <span className="font-semibold text-primary">YOU</span>
-            ) : (
-              <span className="font-semibold text-white/85">
-                {turn?.name ?? "…"}
-              </span>
+            Round {room.round} of {room.roundsTotal} · 🎬{" "}
+            <span className="font-semibold text-white/85">
+              {creator?.name ?? "—"}
+            </span>
+            {room.me?.isCreator && (
+              <span className="ml-1 font-semibold text-primary">(you)</span>
             )}
           </p>
         ) : (
-          <p className="text-xs text-white/50">
-            {room.players.find((p) => p.isCreator)?.name} is writing the
-            question
+          <p className="flex items-center justify-center gap-1.5 text-xs text-white/50">
+            <Crown className="h-3.5 w-3.5 text-primary/70" />
+            Waiting for a game to start
           </p>
         )}
       </div>

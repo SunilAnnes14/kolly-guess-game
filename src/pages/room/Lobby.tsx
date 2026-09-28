@@ -5,12 +5,22 @@ import { cn, friendlyError } from "@/lib/utils";
 import type { RoomState } from "@/pages/room/types";
 import { motion } from "framer-motion";
 import { useMutation } from "convex/react";
-import { Clapperboard, Crown, Share2, Shuffle } from "lucide-react";
+import {
+  ArrowRight,
+  Clapperboard,
+  Crown,
+  Loader2,
+  Share2,
+  Shuffle,
+  Star,
+} from "lucide-react";
 import { useState } from "react";
 
 /**
- * The invite screen — feels like the poster wall outside a private
- * screening: big code, share buttons, the audience assembling.
+ * The invite screen — the poster wall outside a private screening.
+ *
+ * Once everyone is in, the host opens the game: every player writes exactly
+ * one question and guesses everybody else's, so the 🎬 badge walks the room.
  */
 export function Lobby({
   room,
@@ -21,15 +31,13 @@ export function Lobby({
   token: string;
   onSwitchPlayer: () => void;
 }) {
-  const startCreating = useMutation(api.game.startCreating);
-  const passCreator = useMutation(api.game.passCreator);
+  const startGame = useMutation(api.game.startGame);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const me = room.me;
-  const creator = room.players.find((p) => p.isCreator);
+  const host = room.players.find((p) => p.isHost);
   const link = inviteLink(room.code);
-  const isCreator = !!me?.isCreator;
   const enoughPlayers = room.players.length >= 2;
   const canShare = typeof navigator !== "undefined" && !!navigator.share;
 
@@ -37,7 +45,7 @@ export function Lobby({
     setBusy(true);
     setError(null);
     try {
-      await startCreating({ token });
+      await startGame({ token });
     } catch (err) {
       setError(friendlyError(err));
     } finally {
@@ -45,20 +53,11 @@ export function Lobby({
     }
   };
 
-  const handlePass = async (playerId: RoomState["players"][number]["id"]) => {
-    setError(null);
-    try {
-      await passCreator({ token, playerId });
-    } catch (err) {
-      setError(friendlyError(err));
-    }
-  };
-
   const handleShare = async () => {
     try {
       await navigator.share({
         title: "KOLLYWOOD",
-        text: `Join my KOLLYWOOD room — crack the hero, heroine, movie and song! Code ${room.code}`,
+        text: `Join my KOLLYWOOD room — cracking the hero, heroine, movie and song! Code ${room.code}`,
         url: link,
       });
     } catch {
@@ -154,12 +153,12 @@ export function Lobby({
               }}
               className={cn(
                 "flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5",
-                player.isCreator
+                player.isHost
                   ? "border-primary/40 bg-primary/[0.08]"
                   : "border-white/[0.07] bg-white/[0.03]",
               )}
             >
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#ff5a2c]/70 font-display text-sm text-black">
+              <span className="font-display grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#ff5a2c]/70 text-sm text-black">
                 {player.name.charAt(0).toUpperCase()}
               </span>
               <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/90">
@@ -170,22 +169,10 @@ export function Lobby({
                   </span>
                 )}
               </span>
-              {player.isCreator ? (
+              {player.isHost && (
                 <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-1 text-[9px] font-semibold tracking-[0.12em] text-primary uppercase">
-                  <Crown className="h-3 w-3" /> Creator
+                  <Star className="h-3 w-3" /> Host
                 </span>
-              ) : (
-                isCreator &&
-                enoughPlayers && (
-                  <button
-                    type="button"
-                    onClick={() => handlePass(player.id)}
-                    title="Let this player write the next question"
-                    className="shrink-0 rounded-full border border-white/15 px-2 py-1 text-[9px] tracking-[0.12em] text-white/50 uppercase transition-colors hover:border-primary/50 hover:text-primary"
-                  >
-                    make creator
-                  </button>
-                )
               )}
             </motion.li>
           ))}
@@ -201,12 +188,48 @@ export function Lobby({
             </motion.li>
           )}
         </ul>
-
-        {error && <p className="mt-3 text-sm text-[#ff7a55]">{error}</p>}
       </div>
 
+      {/* ---------- how the game runs ---------- */}
+      {enoughPlayers && (
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass rounded-2xl p-5"
+        >
+          <p className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.3em] text-white/55 uppercase">
+            <Crown className="h-3.5 w-3.5 text-primary" /> Question rotation
+          </p>
+          <p className="mt-1.5 text-xs leading-relaxed text-white/50">
+            Everyone writes exactly one question and guesses everybody
+            else&apos;s. {room.players.length} players ={" "}
+            {room.players.length} rounds.
+          </p>
+          <ol className="mt-3.5 flex flex-wrap items-center gap-x-2 gap-y-2">
+            {room.players.map((player, index) => (
+              <li key={player.id} className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs",
+                    index === 0
+                      ? "border-primary/50 bg-primary/12 text-primary"
+                      : "border-white/12 text-white/60",
+                  )}
+                >
+                  {index === 0 ? "🎬 " : ""}
+                  {player.name}
+                </span>
+                {index < room.players.length - 1 && (
+                  <ArrowRight className="h-3.5 w-3.5 text-white/25" />
+                )}
+              </li>
+            ))}
+          </ol>
+        </motion.div>
+      )}
+
       {/* ---------- start ---------- */}
-      {isCreator ? (
+      {me?.isHost ? (
         <div className="grid gap-3">
           <button
             type="button"
@@ -219,20 +242,27 @@ export function Lobby({
                 : "cursor-not-allowed border border-white/10 bg-white/[0.04] text-white/35",
             )}
           >
-            <span className="text-lg">🎬</span> CREATE QUESTION
+            {busy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <span className="text-lg">🎬</span> START THE GAME
+              </>
+            )}
           </button>
-          {!enoughPlayers && (
-            <p className="text-center text-xs text-white/45">
-              You need at least one friend in the room before the show starts.
-            </p>
+          <p className="text-center text-xs text-white/45">
+            You take the first question, then the 🎬 passes to the next player.
+          </p>
+          {error && (
+            <p className="text-center text-sm text-[#ff7a55]">{error}</p>
           )}
         </div>
       ) : (
         <div className="glass flex items-center justify-center gap-3 rounded-2xl px-4 py-5 text-center text-sm text-white/65">
           <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
           Waiting for{" "}
-          <span className="font-semibold text-white/90">{creator?.name}</span>{" "}
-          to create the question…
+          <span className="font-semibold text-white/90">{host?.name}</span> to
+          start the game…
         </div>
       )}
     </div>

@@ -3,8 +3,16 @@ import { cn, friendlyError } from "@/lib/utils";
 import type { RoomState } from "@/pages/room/types";
 import { motion } from "framer-motion";
 import { useMutation } from "convex/react";
-import { Loader2 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import {
+  ArrowRight,
+  Check,
+  Clapperboard,
+  Loader2,
+  RotateCcw,
+  Trophy,
+  X,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
@@ -41,11 +49,11 @@ function RevealWord({ text, className }: { text: string; className?: string }) {
 
 const CONFETTI_COLORS = ["#f5c542", "#ff5a2c", "#7c5cff", "#ffe9a8", "#ffffff"];
 
-/** A tasteful burst of film-strip confetti — loops gently behind the win card. */
+/** A tasteful burst of film-strip confetti, looping behind the big moments. */
 function Confetti() {
   const pieces = useMemo(
     () =>
-      Array.from({ length: 30 }, (_, index) => ({
+      Array.from({ length: 34 }, (_, index) => ({
         id: index,
         left: (index * 37) % 100,
         delay: (index % 10) * 0.14,
@@ -58,7 +66,10 @@ function Confetti() {
   );
 
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+    >
       {pieces.map((piece) => (
         <motion.span
           key={piece.id}
@@ -84,314 +95,410 @@ function Confetti() {
   );
 }
 
-/** Who discovered what — the four-line scorecard under the movie title. */
-function PartsReveal({
-  room,
-  delay = 0.75,
-}: {
-  room: RoomState;
-  delay?: number;
-}) {
-  const values = room.question?.values;
-  if (!values) return null;
-
+function PlayerAvatar({ name }: { name: string }) {
   return (
-    <motion.ul
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.5, ease: EASE }}
-      className="mx-auto mt-5 grid max-w-sm gap-2 text-left"
-    >
-      {PARTS.map((part, index) => (
-        <motion.li
-          key={part.key}
-          initial={{ opacity: 0, x: -14 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: delay + index * 0.09, duration: 0.45, ease: EASE }}
-          className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5"
-        >
-          <span aria-hidden className="text-base">
-            {part.icon}
-          </span>
-          <span className="w-16 shrink-0 text-[10px] font-semibold tracking-[0.2em] text-white/45 uppercase">
-            {part.label}
-          </span>
-          <span className="font-display min-w-0 flex-1 truncate text-lg tracking-wide text-white">
-            {values[part.key] ?? "—"}
-          </span>
-        </motion.li>
-      ))}
-    </motion.ul>
+    <span className="font-display grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#ff5a2c]/70 text-sm text-black">
+      {name.charAt(0).toUpperCase()}
+    </span>
   );
 }
 
-/** Shared action buttons — only the creator moves the room forward. */
-function RoundActions({
-  room,
-  token,
-  primary,
-}: {
-  room: RoomState;
-  token: string;
-  primary: { label: string; emoji: string; mode: "replay" | "next" };
-}) {
-  const advanceRound = useMutation(api.game.advanceRound);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const creator = room.players.find((p) => p.isCreator);
-
-  if (!room.me?.isCreator) {
-    return (
-      <p className="mx-auto flex max-w-xs items-center justify-center gap-2 text-sm text-white/60">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
-        Waiting for {creator?.name} to start the next round…
-      </p>
-    );
-  }
-
-  const go = async (mode: "replay" | "next" | "lobby", tag: string) => {
-    setBusy(tag);
-    setError(null);
-    try {
-      await advanceRound({ token, mode });
-    } catch (err) {
-      setError(friendlyError(err));
-      setBusy(null);
-    }
-  };
+/** The four parts of the round's answer. */
+function AnswerCard({ room, delay = 0.3 }: { room: RoomState; delay?: number }) {
+  const answer = room.answerKey;
+  if (!answer) return null;
 
   return (
-    <div className="grid w-full gap-2.5">
-      <button
-        type="button"
-        onClick={() => go(primary.mode, "primary")}
-        className="kolly-cta flex h-14 items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground shadow-[0_10px_34px_rgba(245,197,66,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(245,197,66,0.5)] active:translate-y-0 disabled:opacity-60"
-        disabled={busy !== null}
-      >
-        {busy === "primary" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <>
-            <span>{primary.emoji}</span> {primary.label}
-          </>
-        )}
-      </button>
-      <div className="grid gap-2.5 sm:grid-cols-2">
-        <button
-          type="button"
-          onClick={() => go("next", "next")}
-          disabled={busy !== null}
-          className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-primary/45 text-sm font-semibold text-primary transition-all hover:bg-primary/10 disabled:opacity-55"
-        >
-          {busy === "next" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <>
-              <span>🎬</span> NEW QUESTION
-            </>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => go("lobby", "lobby")}
-          disabled={busy !== null}
-          className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-white/15 text-sm font-semibold text-white/70 transition-all hover:bg-white/5 disabled:opacity-55"
-        >
-          {busy === "lobby" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            "BACK TO ROOM"
-          )}
-        </button>
+    <div className="mx-auto mt-5 max-w-md">
+      <div className="text-center">
+        <RevealWord
+          text={answer.movie}
+          className="font-display text-glow-gold text-5xl leading-none tracking-[0.05em] gold-text sm:text-6xl"
+        />
       </div>
-      {error && <p className="text-center text-sm text-[#ff7a55]">{error}</p>}
+      <ul className="mt-4 grid gap-2 text-left">
+        {PARTS.map((part, index) => (
+          <motion.li
+            key={part.key}
+            initial={{ opacity: 0, x: -14 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{
+              delay: delay + index * 0.08,
+              duration: 0.45,
+              ease: EASE,
+            }}
+            className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5"
+          >
+            <span aria-hidden className="text-base">
+              {part.icon}
+            </span>
+            <span className="w-16 shrink-0 text-[10px] font-semibold tracking-[0.2em] text-white/45 uppercase">
+              {part.label}
+            </span>
+            <span className="font-display min-w-0 flex-1 truncate text-lg tracking-wide text-white">
+              {answer[part.key]}
+            </span>
+          </motion.li>
+        ))}
+      </ul>
     </div>
   );
 }
 
-function OverlayShell({
-  children,
-  tone,
+function ProgressMark({
+  status,
 }: {
-  children: ReactNode;
-  tone: "gold" | "ember";
+  status: RoomState["entries"][number]["status"];
+}) {
+  if (status === "solved") {
+    return (
+      <span className="flex items-center gap-1 rounded-full bg-primary px-2.5 py-0.5 text-[9px] font-bold tracking-[0.14em] text-primary-foreground uppercase">
+        <Check className="h-3 w-3" /> Solved
+      </span>
+    );
+  }
+  if (status === "failed") {
+    return (
+      <span className="flex items-center gap-1 rounded-full bg-destructive/20 px-2.5 py-0.5 text-[9px] font-bold tracking-[0.14em] text-[#ff7a55] uppercase">
+        <X className="h-3 w-3" /> Failed
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-full border border-white/15 px-2.5 py-0.5 text-[9px] font-bold tracking-[0.14em] text-white/50 uppercase">
+      {status}
+    </span>
+  );
+}
+
+function Shell({
+  children,
+  confetti = false,
+}: {
+  children: React.ReactNode;
+  confetti?: boolean;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.35 }}
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/75 p-4 backdrop-blur-md"
-    >
-      {tone === "gold" && <Confetti />}
+    <div className="relative mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-8 sm:py-12">
+      {confetti && (
+        <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
+          <Confetti />
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Round complete — recap, then hand the mic to the next creator       */
+/* ------------------------------------------------------------------ */
+
+export function RoundComplete({
+  room,
+  token,
+}: {
+  room: RoomState;
+  token: string;
+}) {
+  const startNextRound = useMutation(api.game.startNextRound);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isNextCreator = !!room.me && room.me.id === room.nextCreatorId;
+  const creator = room.players.find((p) => p.isCreator);
+  const next = room.players.find((p) => p.id === room.nextCreatorId);
+
+  const recap = [...room.entries].sort((a, b) => b.score - a.score);
+  const standings = [...room.players].sort(
+    (a, b) => b.points - a.points || b.solves - a.solves,
+  );
+
+  const advance = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await startNextRound({ token });
+    } catch (err) {
+      setError(friendlyError(err));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Shell confetti>
       <motion.div
-        initial={{ opacity: 0, scale: 0.9, y: 24 }}
+        initial={{ opacity: 0, scale: 0.94, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 190, damping: 19 }}
-        className={cn(
-          "glass-deep relative w-full max-w-lg rounded-3xl px-5 py-9 text-center sm:px-9",
-          tone === "gold"
-            ? "border-primary/35 shadow-[0_0_80px_rgba(245,197,66,0.16)]"
-            : "border-destructive/35 shadow-[0_0_80px_rgba(255,90,44,0.14)]",
-        )}
+        className="glass-deep relative overflow-hidden rounded-3xl px-5 py-8 text-center sm:px-9"
       >
-        {children}
+        <div className="film-strip animate-strip absolute inset-x-0 top-0 h-7 opacity-40" />
+
+        <motion.p
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.5, ease: EASE }}
+          className="font-display mt-3 text-3xl tracking-[0.14em] gold-text sm:text-4xl"
+        >
+          🎬 ROUND {room.round} COMPLETE
+        </motion.p>
+        <p className="mt-2 text-xs font-semibold tracking-[0.3em] text-white/50 uppercase">
+          Everyone finished {creator?.name ? `${creator.name}'s` : "the"}{" "}
+          question
+        </p>
+
+        <AnswerCard room={room} />
+
+        {/* ---------- this round's scores ---------- */}
+        <ul className="mx-auto mt-6 grid max-w-md gap-2">
+          {recap.map((entry, index) => (
+            <motion.li
+              key={entry.playerId}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 + index * 0.07, duration: 0.4 }}
+              className={cn(
+                "flex items-center gap-3 rounded-xl border px-3.5 py-2.5",
+                entry.status === "solved"
+                  ? "border-primary/40 bg-primary/[0.08]"
+                  : "border-white/[0.08] bg-white/[0.02]",
+              )}
+            >
+              <PlayerAvatar name={entry.playerName} />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/90">
+                {entry.playerName}
+              </span>
+              <ProgressMark status={entry.status} />
+              <span className="font-display w-12 text-right text-xl leading-none gold-text">
+                {entry.score}
+              </span>
+            </motion.li>
+          ))}
+        </ul>
+
+        <div className="gold-rule mx-auto mt-6 w-2/3" />
+
+        {/* ---------- running totals ---------- */}
+        <p className="mt-5 text-[10px] font-semibold tracking-[0.34em] text-white/45 uppercase">
+          Tournament so far
+        </p>
+        <ol className="mx-auto mt-3 flex max-w-md flex-wrap items-center justify-center gap-2">
+          {standings.map((player) => (
+            <li
+              key={player.id}
+              className="flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-3 py-1.5"
+            >
+              <span className="text-xs text-white/70">{player.name}</span>
+              <span className="font-display text-base leading-none text-primary">
+                {player.points}
+              </span>
+            </li>
+          ))}
+        </ol>
       </motion.div>
-    </motion.div>
-  );
-}
 
-/* ------------------------------------------------------------------ */
-/* Win — all four parts discovered                                     */
-/* ------------------------------------------------------------------ */
-
-export function WinOverlay({
-  room,
-  token,
-  winnerName,
-}: {
-  room: RoomState;
-  token: string;
-  winnerName: string;
-}) {
-  const question = room.question;
-  if (!question) return null;
-
-  const iWon = !!room.me && room.me.name === winnerName;
-
-  return (
-    <OverlayShell tone="gold">
-      <motion.p
-        initial={{ opacity: 0, y: -14 }}
+      {/* ---------- next creator ---------- */}
+      <motion.div
+        initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.5, ease: EASE }}
-        className="font-display text-3xl tracking-[0.14em] gold-text sm:text-4xl"
+        transition={{ delay: 0.35, duration: 0.5, ease: EASE }}
+        className="glass-deep rounded-3xl px-5 py-7 text-center"
       >
-        🎉 YOU SOLVED IT!
-      </motion.p>
+        <p className="text-[10px] font-semibold tracking-[0.34em] text-primary/80 uppercase">
+          Next question creator
+        </p>
+        <div className="mt-3 flex items-center justify-center gap-3">
+          <Clapperboard className="h-5 w-5 text-primary" />
+          <p className="font-display gold-text text-glow-gold text-4xl tracking-[0.14em] uppercase">
+            {next?.name ?? "—"}
+          </p>
+        </div>
+        <p className="mt-2.5 text-sm text-white/60">
+          {isNextCreator
+            ? "Your turn to challenge everyone!"
+            : `Waiting for ${next?.name ?? "the next creator"} to set the question…`}
+        </p>
 
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.25, duration: 0.4 }}
-        className="mt-3 text-[10px] font-semibold tracking-[0.34em] text-primary/80 uppercase"
-      >
-        All four clues discovered
-      </motion.p>
+        {isNextCreator ? (
+          <button
+            type="button"
+            onClick={advance}
+            disabled={busy}
+            className="kolly-cta mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground shadow-[0_10px_34px_rgba(245,197,66,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(245,197,66,0.5)] active:translate-y-0 disabled:opacity-60"
+          >
+            {busy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <span className="text-lg">🎬</span> CREATE THE NEXT QUESTION
+              </>
+            )}
+          </button>
+        ) : (
+          <p className="mt-5 flex items-center justify-center gap-2 text-sm text-white/50">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+            Round {room.round + 1} of {room.roundsTotal} is loading…
+          </p>
+        )}
 
-      <div className="mt-3">
-        <RevealWord
-          text={question.values.movie ?? ""}
-          className="font-display text-glow-gold text-6xl leading-none tracking-[0.05em] gold-text sm:text-7xl"
-        />
-      </div>
-
-      <PartsReveal room={room} />
-
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.2, duration: 0.5 }}
-        className="mt-6 text-sm font-semibold tracking-[0.24em] text-primary uppercase"
-      >
-        ⭐ Chances remaining: {room.lives} / 9
-      </motion.p>
-
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.35, duration: 0.5 }}
-        className="mt-2 text-sm text-white/65"
-      >
-        {winnerName ? (
-          iWon ? (
-            <span className="font-semibold text-primary">
-              You cracked the last piece!
-            </span>
-          ) : (
-            <span className="font-semibold text-primary">
-              {winnerName} cracked the last piece!
-            </span>
-          )
-        ) : null}
-      </motion.p>
-
-      <div className="gold-rule mx-auto mt-6 w-2/3" />
-
-      <div className="mt-6 flex justify-center">
-        <RoundActions
-          room={room}
-          token={token}
-          primary={{ label: "PLAY AGAIN", emoji: "🔁", mode: "replay" }}
-        />
-      </div>
-    </OverlayShell>
+        {error && <p className="mt-3 text-sm text-[#ff7a55]">{error}</p>}
+      </motion.div>
+    </Shell>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Game over — the nine chances ran out                                */
+/* Finished — the KOLLYWOOD champion                                   */
 /* ------------------------------------------------------------------ */
 
-export function GameOverOverlay({
+export function Champion({
   room,
   token,
 }: {
   room: RoomState;
   token: string;
 }) {
-  const question = room.question;
-  if (!question) return null;
+  const restartGame = useMutation(api.game.restartGame);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const solved = room.question?.solvedCount ?? 0;
+  const standings = useMemo(
+    () =>
+      [...room.players].sort(
+        (a, b) =>
+          b.points - a.points || b.solves - a.solves || a.name.localeCompare(b.name),
+      ),
+    [room.players],
+  );
+  const champion = standings[0];
+  const iWon = !!room.me && room.me.id === champion?.id;
+
+  const playAgain = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await restartGame({ token });
+    } catch (err) {
+      setError(friendlyError(err));
+      setBusy(false);
+    }
+  };
 
   return (
-    <OverlayShell tone="ember">
-      <motion.p
-        initial={{ opacity: 0, scale: 1.3, filter: "blur(10px)" }}
-        animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-        transition={{ duration: 0.6, ease: EASE }}
-        className="font-display text-4xl tracking-[0.14em] text-[#ff7a55] text-glow-ember sm:text-5xl"
+    <Shell confetti>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 22 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 180, damping: 18 }}
+        className="glass-deep relative overflow-hidden rounded-3xl border-primary/35 px-5 py-10 text-center shadow-[0_0_80px_rgba(245,197,66,0.16)] sm:px-9"
       >
-        🎞️ THE MOVIE GOT AWAY!
-      </motion.p>
+        <motion.p
+          initial={{ opacity: 0, y: -14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.5, ease: EASE }}
+          className="font-display text-3xl tracking-[0.2em] gold-text sm:text-4xl"
+        >
+          🏆 FINAL SCORE
+        </motion.p>
 
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.4, duration: 0.5 }}
-        className="mt-3 text-xs font-semibold tracking-[0.34em] text-white/60 uppercase"
-      >
-        {solved} / 4 parts found · 9 chances gone
-      </motion.p>
+        <p className="mt-6 text-[10px] font-semibold tracking-[0.34em] text-white/45 uppercase">
+          {room.roundsTotal} questions · everyone wrote one
+        </p>
 
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.7, duration: 0.45 }}
-        className="mt-7 text-sm text-white/55"
-      >
-        The answer was…
-      </motion.p>
+        <motion.div
+          initial={{ opacity: 0, scale: 1.25, filter: "blur(12px)" }}
+          animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+          transition={{ delay: 0.35, duration: 0.65, ease: EASE }}
+          className="mt-4"
+        >
+          <p className="text-[11px] font-semibold tracking-[0.4em] text-primary/80 uppercase">
+            🎬 Kollywood champion
+          </p>
+          <p className="font-display gold-text text-glow-gold mt-2 text-6xl leading-none tracking-[0.1em] sm:text-7xl">
+            {champion?.name?.toUpperCase() ?? "—"}
+          </p>
+          <p className="mt-3 text-sm text-white/65">
+            {iWon
+              ? "You took the trophy! 🎉"
+              : `${champion?.name ?? "They"} took the trophy.`}
+          </p>
+        </motion.div>
 
-      <div className="mt-2.5">
-        <RevealWord
-          text={question.values.movie ?? ""}
-          className="font-display text-glow-gold text-6xl leading-none tracking-[0.05em] gold-text sm:text-7xl"
-        />
-      </div>
+        <div className="gold-rule mx-auto mt-7 w-2/3" />
 
-      <PartsReveal room={room} delay={1.05} />
+        {/* ---------- full leaderboard ---------- */}
+        <ol className="mx-auto mt-6 grid max-w-md gap-2 text-left">
+          {standings.map((player, index) => (
+            <motion.li
+              key={player.id}
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.6 + index * 0.08, duration: 0.45, ease: EASE }}
+              className={cn(
+                "flex items-center gap-3 rounded-2xl border px-3.5 py-3",
+                index === 0
+                  ? "border-primary/50 bg-primary/[0.1]"
+                  : "border-white/[0.08] bg-white/[0.02]",
+              )}
+            >
+              <span
+                className={cn(
+                  "font-display w-6 text-center text-2xl leading-none",
+                  index === 0 ? "text-primary" : "text-white/45",
+                )}
+              >
+                {index + 1}
+              </span>
+              <PlayerAvatar name={player.name} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-white/90">
+                  {player.name}
+                  {player.id === room.me?.id && (
+                    <span className="ml-1.5 text-[10px] tracking-wider text-white/40 uppercase">
+                      you
+                    </span>
+                  )}
+                </span>
+                <span className="block text-[10px] tracking-wide text-white/45">
+                  ✓ {player.solves} solved · {player.correct} parts ·{" "}
+                  {player.attempts} guesses
+                </span>
+              </span>
+              {index === 0 && (
+                <Trophy className="h-4 w-4 shrink-0 text-primary" />
+              )}
+              <span className="font-display w-14 text-right text-2xl leading-none gold-text">
+                {player.points}
+              </span>
+            </motion.li>
+          ))}
+        </ol>
+      </motion.div>
 
-      <div className="gold-rule mx-auto mt-6 w-2/3" />
+      {room.me?.isHost ? (
+        <button
+          type="button"
+          onClick={playAgain}
+          disabled={busy}
+          className="kolly-cta flex h-14 w-full items-center justify-center gap-2.5 rounded-2xl border border-primary/45 bg-transparent text-base font-semibold text-primary transition-all hover:-translate-y-0.5 hover:bg-primary/10 disabled:opacity-60"
+        >
+          {busy ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <>
+              <RotateCcw className="h-4 w-4" /> RUN IT BACK
+            </>
+          )}
+        </button>
+      ) : (
+        <p className="flex items-center justify-center gap-2 text-sm text-white/50">
+          <ArrowRight className="h-4 w-4 text-primary/70" />
+          Waiting for the host to start a new game…
+        </p>
+      )}
 
-      <div className="mt-6 flex justify-center">
-        <RoundActions
-          room={room}
-          token={token}
-          primary={{ label: "TRY AGAIN", emoji: "🎬", mode: "replay" }}
-        />
-      </div>
-    </OverlayShell>
+      {error && <p className="text-center text-sm text-[#ff7a55]">{error}</p>}
+    </Shell>
   );
 }

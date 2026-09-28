@@ -6,10 +6,16 @@ import { mutation, query } from "./_generated/server";
 /** Room codes look like ABX729 — no ambiguous 0/O or 1/I. */
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 6;
-/** K · O · L · L · Y · W · O · O · D — one shared pool for all four parts. */
+
+/**
+ * K · O · L · L · Y · W · O · O · D
+ *
+ * Every player gets their OWN nine, for every question they guess. These are
+ * never shared, pooled or carried across rounds.
+ */
 export const MAX_LIVES = 9;
-/** Wrong guesses consumed before the creator may drop a clue. */
-export const CLUE_UNLOCK_AT = 5;
+/** Chances a player must spend before they may ask for a clue. */
+export const CLUE_UNLOCK_USED = 5;
 const MAX_PLAYERS = 12;
 const MAX_NAME = 18;
 const MAX_GUESS = 90;
@@ -31,9 +37,13 @@ function emptyRevealed(): Revealed {
   return { hero: false, heroine: false, movie: false, song: false };
 }
 
-/** Rooms created before the four-part board show nothing as found yet. */
-function revealedOf(room: { revealed?: Revealed | null }): Revealed {
-  return { ...emptyRevealed(), ...(room.revealed ?? {}) };
+/** Rows written before the four-part board show nothing as found yet. */
+function revealedOf(entry: { revealed?: Revealed | null }): Revealed {
+  return { ...emptyRevealed(), ...(entry.revealed ?? {}) };
+}
+
+function isComplete(revealed: Revealed): boolean {
+  return CATEGORY_ORDER.every((c) => revealed[c]);
 }
 
 type Ctx = QueryCtx | MutationCtx;
@@ -50,6 +60,11 @@ function answerFor(question: Question, category: Category): string {
     case "song":
       return question.song;
   }
+}
+
+/** Closing the board with lives to spare is worth more than scraping through. */
+function scoreForSolve(lives: number): number {
+  return (Math.max(0, lives) + 1) * 10;
 }
 
 function generateCode(): string {
@@ -105,6 +120,7 @@ async function playerByToken(ctx: Ctx, token: string): Promise<Doc<"players">> {
   return player;
 }
 
+/** Everyone in the room, in join order — this IS the creator rotation. */
 async function playersInRoom(
   ctx: Ctx,
   roomId: Id<"rooms">,
@@ -116,12 +132,64 @@ async function playersInRoom(
   return players.sort((a, b) => a.joinedAt - b.joinedAt);
 }
 
-/** Everyone except the question creator, in join order — the guess rotation. */
-function guessersOf(
-  room: Doc<"rooms">,
-  players: Doc<"players">[],
-): Doc<"players">[] {
-  return players.filter((p) => p._id !== room.creatorId);
+/**
+ * Whose turn it is to write the question.
+ *
+ * The room host opens the game, then the role walks the join order. We rotate
+ * against `roundsTotal` (fixed when the game starts) so players who join
+ * mid-game land after the rotation instead of shifting it.
+ */
+function creatorIndex(round: number, roundsTotal: number): number {
+  if (roundsTotal <= 0) return 0;
+  return (round - 1) % roundsTotal;
+}
+
+async function entriesForRound(
+  ctx: Ctx,
+  roomId: Id<"rooms">,
+  round: number,
+): Promise<Doc<"roundEntries">[]> {
+  return await ctx.db
+    .query("roundEntries")
+    .withIndex("by_room_round", (q) => q.eq("roomId", roomId).eq("round", round))
+    .collect();
+}
+
+async function guessesForRound(
+  ctx: Ctx,
+  roomId: Id<"rooms">,
+  round: number,
+): Promise<Doc<"guesses">[]> {
+  const guesses = await ctx.db
+    .query("guesses")
+    .withIndex("by_room_round", (q) => q.eq("roomId", roomId).eq("round", round))
+    .collect();
+  return guesses.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+async function entryFor(
+  ctx: Ctx,
+  roomId: Id<"rooms">,
+  round: number,
+  playerId: Id<"players">,
+): Promise<Doc<"roundEntries"> | null> {
+  return await ctx.db
+    .query("roundEntries")
+    .withIndex("by_room_round_player", (q) =>
+      q.eq("roomId", roomId).eq("round", round).eq("playerId", playerId),
+    )
+    .unique();
+}
+
+/** Flip the room out of "playing" the moment the last player finishes. */
+async function settleRound(ctx: MutationCtx, room: Doc<"rooms">) {
+  const entries = await entriesForRound(ctx, room._id, room.round);
+  if (entries.length === 0) return;
+  if (entries.some((e) => e.status === "playing")) return;
+
+  await ctx.db.patch(room._id, {
+    status: room.round >= room.roundsTotal ? "finished" : "roundComplete",
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -152,14 +220,8 @@ export const createRoom = mutation({
       code,
       status: "lobby",
       creatorId: null,
-      currentTurnId: null,
-      pendingGuessId: null,
       round: 1,
-      lives: MAX_LIVES,
-      wrongGuesses: 0,
-      revealed: emptyRevealed(),
-      clue: "",
-      clueCategory: null,
+      roundsTotal: 0,
       question: null,
       createdAt: now,
     });
@@ -170,13 +232,12 @@ export const createRoom = mutation({
       token,
       name: clean,
       joinedAt: now,
+      points: 0,
+      solves: 0,
       correct: 0,
       attempts: 0,
-      points: 0,
       cluesUsed: 0,
     });
-    // The room's first player becomes the question creator / judge.
-    await ctx.db.patch(roomId, { creatorId: playerId });
 
     return { code, token, playerId };
   },
@@ -196,7 +257,9 @@ export const joinRoom = mutation({
       let suffix = 2;
       const base = clean.slice(0, MAX_NAME - 2);
       while (
-        existing.some((p) => p.name.toLowerCase() === `${base} ${suffix}`.toLowerCase())
+        existing.some(
+          (p) => p.name.toLowerCase() === `${base} ${suffix}`.toLowerCase(),
+        )
       ) {
         suffix += 1;
       }
@@ -208,10 +271,12 @@ export const joinRoom = mutation({
       roomId: room._id,
       token,
       name: clean,
-      joinedAt: Date.now(),
+      // Nudge past any same-millisecond joins so the rotation order is stable.
+      joinedAt: Date.now() + existing.length,
+      points: 0,
+      solves: 0,
       correct: 0,
       attempts: 0,
-      points: 0,
       cluesUsed: 0,
     });
     return { code: room.code, token, playerId, name: clean };
@@ -223,12 +288,11 @@ export const joinRoom = mutation({
 /* ------------------------------------------------------------------ */
 
 /**
- * The whole room, live.
+ * The whole room, live — shaped around the viewer.
  *
- * `question.revealed` is the honest public board — which parts have been
- * cracked. `question.values` only carries a part's answer once it has been
- * discovered (or for the creator, who needs the answer key to judge, or once
- * the round is over). The initials are always visible: they are the clue.
+ * A guesser only ever receives their OWN board values, their own clue and
+ * their own nine chances. The creator receives the answer key so they can
+ * judge, plus every player's guess waiting on their call.
  */
 export const getRoom = query({
   args: { code: v.string(), token: v.optional(v.string()) },
@@ -241,51 +305,50 @@ export const getRoom = query({
     if (!room) return null;
 
     const players = await playersInRoom(ctx, room._id);
-    const me = token
-      ? (players.find((p) => p.token === token) ?? null)
-      : null;
+    const me = token ? (players.find((p) => p.token === token) ?? null) : null;
+    const hostId = players[0]?._id ?? null;
     const isCreator = !!me && me._id === room.creatorId;
-
-    const solved = revealedOf(room);
-    const finished = room.status === "won" || room.status === "over";
-    const questionVisible =
-      room.question !== null &&
-      (room.status === "playing" ||
-        room.status === "won" ||
-        room.status === "over");
-    // The creator judges every guess, so they always hold the answer key.
-    const holdsAnswerKey = isCreator || finished;
-    const canSee = (category: Category) =>
-      holdsAnswerKey || solved[category];
-
-    const guesses = questionVisible
-      ? await ctx.db
-          .query("guesses")
-          .withIndex("by_room_round", (q) =>
-            q.eq("roomId", room._id).eq("round", room.round),
-          )
-          .collect()
-      : [];
-
+    const isHost = !!me && me._id === hostId;
+    const roundOver =
+      room.status === "roundComplete" || room.status === "finished";
     const question = room.question;
-    const solvedCount = CATEGORY_ORDER.filter((c) => solved[c]).length;
+
+    const entries = (await entriesForRound(ctx, room._id, room.round)).sort(
+      (a, b) => a.createdAt - b.createdAt,
+    );
+    const guesses = await guessesForRound(ctx, room._id, room.round);
+    const myEntry = entries.find((e) => e.playerId === me?._id) ?? null;
+
+    // Once the round is over the whole board is public — nothing left to spoil.
+    const holdsAnswerKey = isCreator || roundOver;
+    const valueFor = (category: Category): string | null => {
+      if (!question) return null;
+      if (holdsAnswerKey) return answerFor(question, category);
+      const mine = myEntry ? revealedOf(myEntry)[category] : false;
+      return mine ? answerFor(question, category) : null;
+    };
+
+    const revealedMe = myEntry ? revealedOf(myEntry) : emptyRevealed();
+    const chancesUsed = myEntry ? MAX_LIVES - myEntry.lives : 0;
+
+    const nextRound = roundOver && room.round < room.roundsTotal
+      ? room.round + 1
+      : null;
+    const nextCreator =
+      nextRound !== null
+        ? (players[creatorIndex(nextRound, room.roundsTotal)] ?? null)
+        : null;
 
     return {
       code: room.code,
       status: room.status,
       round: room.round,
-      lives: room.lives,
-      wrongGuesses: room.wrongGuesses,
-      chancesUsed: MAX_LIVES - room.lives,
-      clue: room.clue,
-      clueCategory: room.clueCategory ?? null,
-      clueUnlocked: room.wrongGuesses >= CLUE_UNLOCK_AT && room.clue === "",
-      hasPendingGuess: room.pendingGuessId !== null,
-      myTurn:
-        room.status === "playing" &&
-        room.pendingGuessId === null &&
-        !!me &&
-        me._id === room.currentTurnId,
+      roundsTotal: room.roundsTotal,
+      creatorId: room.creatorId,
+      creatorName:
+        players.find((p) => p._id === room.creatorId)?.name ?? null,
+      nextCreatorId: nextCreator?._id ?? null,
+      nextCreatorName: nextCreator?.name ?? null,
       question: question
         ? {
             initials: {
@@ -294,35 +357,52 @@ export const getRoom = query({
               movie: question.movieInitial,
               song: question.songInitial,
             },
-            revealed: solved,
             values: {
-              hero: canSee("hero") ? question.hero : null,
-              heroine: canSee("heroine") ? question.heroine : null,
-              movie: canSee("movie") ? question.movie : null,
-              song: canSee("song") ? question.song : null,
+              hero: valueFor("hero"),
+              heroine: valueFor("heroine"),
+              movie: valueFor("movie"),
+              song: valueFor("song"),
             },
-            solvedCount,
-            complete: solvedCount === CATEGORY_ORDER.length,
           }
         : null,
-      me: me
-        ? { id: me._id, name: me.name, isCreator }
+      // The creator's cheat sheet — everyone holds it once the round is over.
+      answerKey: holdsAnswerKey && question
+        ? {
+            hero: question.hero,
+            heroine: question.heroine,
+            movie: question.movie,
+            song: question.song,
+          }
         : null,
-      players: players.map((p) => ({
-        id: p._id,
-        name: p.name,
-        points: p.points,
-        correct: p.correct,
-        attempts: p.attempts,
-        cluesUsed: p.cluesUsed,
-        isCreator: p._id === room.creatorId,
-        isTurn: room.status === "playing" && p._id === room.currentTurnId,
-      })),
+      /** The viewer's own nine chances, board and clue. Never anyone else's. */
+      entry: myEntry
+        ? {
+            lives: myEntry.lives,
+            revealed: revealedMe,
+            guesses: myEntry.guesses,
+            status: myEntry.status,
+            score: myEntry.score,
+            chancesUsed,
+            clue: myEntry.clue,
+            clueCategory: myEntry.clueCategory ?? null,
+            clueRequested: myEntry.clueRequested,
+            clueEligible: chancesUsed >= CLUE_UNLOCK_USED,
+            canRequestClue:
+              myEntry.status === "playing" &&
+              chancesUsed >= CLUE_UNLOCK_USED &&
+              !myEntry.clueRequested &&
+              myEntry.clue === "",
+          }
+        : null,
+      /**
+       * Who guessed what. The creator sees the whole round so they can judge
+       * every call; a guesser only ever sees their own, so nobody's answer
+       * leaks to the others.
+       */
       guesses: guesses
-        .sort((a, b) => a.createdAt - b.createdAt)
+        .filter((g) => isCreator || g.playerId === me?._id)
         .map((g) => ({
           id: g._id,
-          // Legacy guesses predate the four-part board.
           category: (g.category ?? "movie") as Category,
           text: g.text,
           status: g.status,
@@ -330,6 +410,49 @@ export const getRoom = query({
           isMine: !!me && g.playerId === me._id,
           createdAt: g.createdAt,
         })),
+      /**
+       * Where everyone stands. The creator also sees each pending guess so
+       * they can call it; a guesser only ever sees their own in full.
+       */
+      entries: entries.map((entry) => {
+        const pending =
+          guesses.find(
+            (g) => g.playerId === entry.playerId && g.status === "pending",
+          ) ?? null;
+        const canSeeGuess = isCreator || entry.playerId === me?._id;
+        return {
+          playerId: entry.playerId,
+          playerName: entry.playerName,
+          lives: entry.lives,
+          revealed: revealedOf(entry),
+          status: entry.status,
+          score: entry.score,
+          guesses: entry.guesses,
+          clueRequested: entry.clueRequested,
+          clue: isCreator ? entry.clue : "",
+          isMine: entry.playerId === me?._id,
+          pending:
+            canSeeGuess && pending
+              ? {
+                  id: pending._id,
+                  category: (pending.category ?? "movie") as Category,
+                  text: pending.text,
+                }
+              : null,
+        };
+      }),
+      me: me ? { id: me._id, name: me.name, isCreator, isHost } : null,
+      players: players.map((p) => ({
+        id: p._id,
+        name: p.name,
+        points: p.points,
+        solves: p.solves ?? 0,
+        correct: p.correct,
+        attempts: p.attempts,
+        cluesUsed: p.cluesUsed,
+        isCreator: p._id === room.creatorId,
+        isHost: p._id === hostId,
+      })),
     };
   },
 });
@@ -338,22 +461,45 @@ export const getRoom = query({
 /* Round flow                                                          */
 /* ------------------------------------------------------------------ */
 
-export const startCreating = mutation({
+/** The host opens the game — every player will write exactly one question. */
+export const startGame = mutation({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
     if (!room) throw new Error("Room not found.");
-    if (room.creatorId !== player._id) {
-      throw new Error("Only the question creator can write the next question.");
-    }
+    // Only from the lobby: a finished game must be reset so nobody carries a
+    // stale board or a half-used set of chances into the new tournament.
     if (room.status !== "lobby") {
-      throw new Error("The question creator is busy right now.");
+      throw new Error(
+        room.status === "finished"
+          ? "Use \"Run it back\" to start a fresh tournament."
+          : "The game is already running.",
+      );
     }
-    await ctx.db.patch(room._id, { status: "creating" });
+
+    const players = await playersInRoom(ctx, room._id);
+    if (players.length < 2) {
+      throw new Error("Share your invite link — you need a friend to play.");
+    }
+    if (players[0]._id !== player._id) {
+      throw new Error("Only the room host can start the game.");
+    }
+
+    await ctx.db.patch(room._id, {
+      status: "creating",
+      round: 1,
+      roundsTotal: players.length,
+      creatorId: players[0]._id,
+      question: null,
+    });
   },
 });
 
+/**
+ * The round's creator writes ONE question. Everyone else gets their own fresh
+ * nine chances and an empty board against that same puzzle.
+ */
 export const submitQuestion = mutation({
   args: {
     token: v.string(),
@@ -367,9 +513,9 @@ export const submitQuestion = mutation({
     const room = await ctx.db.get(player.roomId);
     if (!room) throw new Error("Room not found.");
     if (room.creatorId !== player._id) {
-      throw new Error("Only the question creator can create a question.");
+      throw new Error("Only this round's question creator can write it.");
     }
-    if (room.status !== "creating" && room.status !== "lobby") {
+    if (room.status !== "creating") {
       throw new Error("A question is already in play.");
     }
 
@@ -380,14 +526,42 @@ export const submitQuestion = mutation({
     if (!hero || !heroine || !movie || !song) {
       throw new Error("Fill in all four parts to create the question.");
     }
-    if (movie.length > 80 || song.length > 80 || hero.length > 60 || heroine.length > 60) {
+    if (
+      movie.length > 80 ||
+      song.length > 80 ||
+      hero.length > 60 ||
+      heroine.length > 60
+    ) {
       throw new Error("One of those entries is too long.");
     }
 
-    const everyone = await playersInRoom(ctx, room._id);
-    const rotation = guessersOf(room, everyone);
-    if (rotation.length === 0) {
+    const players = await playersInRoom(ctx, room._id);
+    const guessers = players.filter((p) => p._id !== player._id);
+    if (guessers.length === 0) {
       throw new Error("Share your invite link — you need a friend to play.");
+    }
+
+    const now = Date.now();
+    // A brand-new, fully independent board + nine chances for each guesser.
+    for (const guesser of guessers) {
+      const existing = await entryFor(ctx, room._id, room.round, guesser._id);
+      if (existing) continue;
+      await ctx.db.insert("roundEntries", {
+        roomId: room._id,
+        round: room.round,
+        playerId: guesser._id,
+        playerName: guesser.name,
+        lives: MAX_LIVES,
+        revealed: emptyRevealed(),
+        guesses: 0,
+        clueRequested: false,
+        clue: "",
+        clueCategory: null,
+        status: "playing",
+        score: 0,
+        completedAt: null,
+        createdAt: now + guessers.indexOf(guesser),
+      });
     }
 
     await ctx.db.patch(room._id, {
@@ -402,18 +576,11 @@ export const submitQuestion = mutation({
         movieInitial: initialOf(movie),
         songInitial: initialOf(song),
       },
-      lives: MAX_LIVES,
-      wrongGuesses: 0,
-      revealed: emptyRevealed(),
-      clue: "",
-      clueCategory: null,
-      pendingGuessId: null,
-      currentTurnId: rotation[0]._id,
     });
   },
 });
 
-/** A guess for ONE part — hero, heroine, movie or song. */
+/** A guess aimed at ONE part. Everyone guesses concurrently, in any order. */
 export const submitGuess = mutation({
   args: {
     token: v.string(),
@@ -424,217 +591,244 @@ export const submitGuess = mutation({
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
     if (!room) throw new Error("Room not found.");
-    if (room.status !== "playing") throw new Error("No round is in play.");
+    if (room.status !== "playing") throw new Error("No question is in play.");
     if (room.creatorId === player._id) {
-      throw new Error("You wrote this question — your friend guesses first.");
+      throw new Error("You wrote this question — you sit this one out.");
     }
-    if (room.currentTurnId !== player._id) {
-      throw new Error("It is not your turn yet.");
+
+    const entry = await entryFor(ctx, room._id, room.round, player._id);
+    if (!entry) throw new Error("You are not guessing this question.");
+    if (entry.status !== "playing") {
+      throw new Error("You have already finished this question.");
     }
-    if (room.pendingGuessId !== null) {
-      throw new Error("A guess is waiting to be judged.");
+    if (revealedOf(entry)[category]) {
+      throw new Error("That part is already on your board.");
     }
-    const solved = revealedOf(room);
-    if (solved[category]) {
-      throw new Error("That part is already on the board.");
+
+    const roundGuesses = await guessesForRound(ctx, room._id, room.round);
+    if (
+      roundGuesses.some(
+        (g) => g.playerId === player._id && g.status === "pending",
+      )
+    ) {
+      throw new Error("Your last guess is still waiting to be judged.");
     }
 
     const clean = cleanGuess(text);
-    const now = Date.now();
-    const guessId = await ctx.db.insert("guesses", {
+    await ctx.db.insert("guesses", {
       roomId: room._id,
+      round: room.round,
       playerId: player._id,
       playerName: player.name,
-      round: room.round,
       category,
       text: clean,
       status: "pending",
-      createdAt: now,
+      createdAt: Date.now(),
     });
-    await ctx.db.patch(room._id, { pendingGuessId: guessId });
+    await ctx.db.patch(entry._id, { guesses: entry.guesses + 1 });
     await ctx.db.patch(player._id, { attempts: player.attempts + 1 });
   },
 });
 
 /**
- * The creator is the only judge. A correct call reveals that part — and the
- * guesser keeps the mic to hunt the next one. A wrong call burns one of the
- * nine shared KOLLYWOOD letters and passes the turn.
+ * The round's creator is the only judge, and they call every player's guess
+ * separately. A correct call reveals that part on THAT player's board only.
  */
 export const judgeGuess = mutation({
-  args: { token: v.string(), guessId: v.id("guesses"), correct: v.boolean() },
+  args: {
+    token: v.string(),
+    guessId: v.id("guesses"),
+    correct: v.boolean(),
+  },
   handler: async (ctx, { token, guessId, correct }) => {
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
     if (!room) throw new Error("Room not found.");
     if (room.creatorId !== player._id) {
-      throw new Error("Only the question creator can judge guesses.");
-    }
-    if (room.status !== "playing" || room.pendingGuessId !== guessId) {
-      throw new Error("That guess is no longer waiting.");
+      throw new Error("Only this round's question creator can judge guesses.");
     }
 
     const guess = await ctx.db.get(guessId);
-    if (!guess || guess.roomId !== room._id) throw new Error("Guess not found.");
+    if (!guess || guess.roomId !== room._id || guess.round !== room.round) {
+      throw new Error("Guess not found.");
+    }
+    if (guess.status !== "pending") throw new Error("That guess is no longer waiting.");
+    if (room.status !== "playing") throw new Error("This round has finished.");
+
+    const entry = await entryFor(ctx, room._id, room.round, guess.playerId);
+    if (!entry) throw new Error("That player is not in this round.");
     const guesser = await ctx.db.get(guess.playerId);
     if (!guesser) throw new Error("Guess player not found.");
+
     const category: Category = guess.category ?? "movie";
 
     if (correct) {
-      const revealed = revealedOf(room);
+      const revealed = revealedOf(entry);
       revealed[category] = true;
-      const complete = CATEGORY_ORDER.every((c) => revealed[c]);
-      // Small reward per part, bigger reward for closing the board out.
-      const gained = complete ? 500 : 150;
+      const complete = isComplete(revealed);
+      const score = complete ? scoreForSolve(entry.lives) : entry.score;
 
       await ctx.db.patch(guessId, { status: "correct" });
       await ctx.db.patch(guesser._id, {
         correct: guesser.correct + 1,
-        points: guesser.points + gained,
+        points: guesser.points + (complete ? score - entry.score : 0),
+        solves: (guesser.solves ?? 0) + (complete ? 1 : 0),
       });
-
-      if (complete) {
-        await ctx.db.patch(room._id, {
-          revealed,
-          pendingGuessId: null,
-          currentTurnId: null,
-          status: "won",
-        });
-        return;
-      }
-
-      // The guesser keeps the mic — keep discovering.
-      await ctx.db.patch(room._id, {
+      await ctx.db.patch(entry._id, {
         revealed,
-        pendingGuessId: null,
-        currentTurnId: guesser._id,
+        status: complete ? "solved" : "playing",
+        score,
+        completedAt: complete ? Date.now() : null,
       });
-      return;
+    } else {
+      await ctx.db.patch(guessId, { status: "wrong" });
+      const lives = Math.max(0, entry.lives - 1);
+      await ctx.db.patch(entry._id, {
+        lives,
+        status: lives === 0 ? "failed" : "playing",
+        completedAt: lives === 0 ? Date.now() : null,
+      });
     }
 
-    const lives = Math.max(0, room.lives - 1);
-    const wrongGuesses = room.wrongGuesses + 1;
-    await ctx.db.patch(guessId, { status: "wrong" });
-
-    if (lives === 0) {
-      await ctx.db.patch(room._id, {
-        lives: 0,
-        wrongGuesses,
-        pendingGuessId: null,
-        currentTurnId: null,
-        status: "over",
-      });
-      return;
-    }
-
-    // Pass the mic to the next guesser in the rotation.
-    const everyone = await playersInRoom(ctx, room._id);
-    const rotation = guessersOf(room, everyone);
-    const index = rotation.findIndex((p) => p._id === guess.playerId);
-    const next =
-      index >= 0 ? rotation[(index + 1) % rotation.length] : rotation[0];
-    await ctx.db.patch(room._id, {
-      lives,
-      wrongGuesses,
-      pendingGuessId: null,
-      currentTurnId: next ? next._id : null,
-    });
+    // Only the fresh row tells us whether everyone is done.
+    const fresh = await ctx.db.get(room._id);
+    if (fresh) await settleRound(ctx, fresh);
   },
 });
 
-/** One clue per question, aimed at one specific part. */
-export const createClue = mutation({
-  args: {
-    token: v.string(),
-    category: categoryValidator,
-    text: v.string(),
-  },
-  handler: async (ctx, { token, category, text }) => {
+/** A player who has burned five of their own chances may ask for a clue. */
+export const requestClue = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
     if (!room) throw new Error("Room not found.");
-    if (room.creatorId !== player._id) {
-      throw new Error("Only the question creator can drop a clue.");
+    if (room.status !== "playing") throw new Error("No question is in play.");
+
+    const entry = await entryFor(ctx, room._id, room.round, player._id);
+    if (!entry) throw new Error("You are not guessing this question.");
+    if (entry.status !== "playing") {
+      throw new Error("You have already finished this question.");
     }
-    if (room.status !== "playing") throw new Error("No round is in play.");
-    if (room.wrongGuesses < CLUE_UNLOCK_AT) {
-      throw new Error(`Clue unlocks after ${CLUE_UNLOCK_AT} wrong guesses.`);
+    if (entry.clue) throw new Error("Your clue is already on screen.");
+    if (entry.clueRequested) throw new Error("You already asked for a clue.");
+    if (MAX_LIVES - entry.lives < CLUE_UNLOCK_USED) {
+      throw new Error(`A clue unlocks after ${CLUE_UNLOCK_USED} chances spent.`);
     }
-    if (room.clue) throw new Error("This question already used its clue.");
-    if (revealedOf(room)[category]) {
-      throw new Error("That part is already on the board.");
+
+    await ctx.db.patch(entry._id, { clueRequested: true });
+  },
+});
+
+/** The creator answers ONE player's clue request. Nobody else sees it. */
+export const giveClue = mutation({
+  args: {
+    token: v.string(),
+    playerId: v.id("players"),
+    category: categoryValidator,
+    text: v.string(),
+  },
+  handler: async (ctx, { token, playerId, category, text }) => {
+    const creator = await playerByToken(ctx, token);
+    const room = await ctx.db.get(creator.roomId);
+    if (!room) throw new Error("Room not found.");
+    if (room.creatorId !== creator._id) {
+      throw new Error("Only this round's question creator can drop a clue.");
+    }
+    if (room.status !== "playing") throw new Error("No question is in play.");
+
+    const entry = await entryFor(ctx, room._id, room.round, playerId);
+    if (!entry) throw new Error("That player is not in this round.");
+    if (entry.clue) throw new Error("That player already has their clue.");
+    if (!entry.clueRequested && MAX_LIVES - entry.lives < CLUE_UNLOCK_USED) {
+      throw new Error("That player hasn't reached the clue yet.");
+    }
+    if (revealedOf(entry)[category]) {
+      throw new Error("That part is already on their board.");
     }
 
     const clue = text.trim().replace(/\s+/g, " ");
     if (!clue) throw new Error("Type a clue first.");
     if (clue.length > 140) throw new Error("Keep the clue under 140 characters.");
 
-    await ctx.db.patch(room._id, { clue, clueCategory: category });
-    await ctx.db.patch(player._id, { cluesUsed: player.cluesUsed + 1 });
+    await ctx.db.patch(entry._id, { clue, clueCategory: category });
+    await ctx.db.patch(creator._id, { cluesUsed: creator.cluesUsed + 1 });
   },
 });
 
-/** Win / game-over / lobby transitions — creator decides what happens next. */
-export const advanceRound = mutation({
-  args: {
-    token: v.string(),
-    mode: v.union(
-      v.literal("replay"), // same question, fresh 9 lives
-      v.literal("next"), // creator writes a new question
-      v.literal("lobby"), // back to the invite screen
-    ),
-  },
-  handler: async (ctx, { token, mode }) => {
+/**
+ * The round is done — hand the question-writing job to the next player in the
+ * rotation. Only they can kick off the next question.
+ */
+export const startNextRound = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
     if (!room) throw new Error("Room not found.");
-    if (room.creatorId !== player._id) {
-      throw new Error("Only the question creator can start the next round.");
+    if (room.status !== "roundComplete") {
+      throw new Error("This round hasn't finished yet.");
     }
-    if (mode === "replay" && !room.question) {
-      throw new Error("There is no question to replay.");
+
+    const players = await playersInRoom(ctx, room._id);
+    const next = players[creatorIndex(room.round + 1, room.roundsTotal)];
+    if (!next || next._id !== player._id) {
+      throw new Error("It is the next creator's turn to write the question.");
     }
 
     await ctx.db.patch(room._id, {
-      status: mode === "replay" ? "playing" : mode === "next" ? "creating" : "lobby",
-      question: mode === "replay" ? room.question : null,
-      lives: MAX_LIVES,
-      wrongGuesses: 0,
-      revealed: emptyRevealed(),
-      clue: "",
-      clueCategory: null,
-      pendingGuessId: null,
-      currentTurnId: null,
       round: room.round + 1,
+      creatorId: next._id,
+      status: "creating",
+      question: null,
     });
-
-    if (mode === "replay") {
-      const everyone = await playersInRoom(ctx, room._id);
-      const rotation = guessersOf(room, everyone);
-      await ctx.db.patch(room._id, {
-        currentTurnId: rotation[0]?._id ?? null,
-      });
-    }
   },
 });
 
-/** The creator can hand the question-writing job to someone else between rounds. */
-export const passCreator = mutation({
-  args: { token: v.string(), playerId: v.id("players") },
-  handler: async (ctx, { token, playerId }) => {
+/** After the final round, the host can wipe the board and run it back. */
+export const restartGame = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
     if (!room) throw new Error("Room not found.");
-    if (room.creatorId !== player._id) {
-      throw new Error("Only the current question creator can pass it on.");
+    if (room.status !== "finished") {
+      throw new Error("Finish the game before starting a new one.");
     }
-    if (room.status === "playing") {
-      throw new Error("Finish the round before passing the creator seat.");
+
+    const players = await playersInRoom(ctx, room._id);
+    if (players[0] && players[0]._id !== player._id) {
+      throw new Error("Only the room host can start a new game.");
     }
-    const target = await ctx.db.get(playerId);
-    if (!target || target.roomId !== room._id) {
-      throw new Error("That player is not in this room.");
+
+    const entries = await ctx.db
+      .query("roundEntries")
+      .withIndex("by_room", (q) => q.eq("roomId", room._id))
+      .collect();
+    for (const entry of entries) await ctx.db.delete(entry._id);
+
+    const guesses = await ctx.db
+      .query("guesses")
+      .withIndex("by_room", (q) => q.eq("roomId", room._id))
+      .collect();
+    for (const guess of guesses) await ctx.db.delete(guess._id);
+
+    for (const p of players) {
+      await ctx.db.patch(p._id, {
+        points: 0,
+        solves: 0,
+        correct: 0,
+        attempts: 0,
+        cluesUsed: 0,
+      });
     }
-    await ctx.db.patch(room._id, { creatorId: playerId });
+
+    await ctx.db.patch(room._id, {
+      status: "lobby",
+      round: 1,
+      roundsTotal: 0,
+      creatorId: null,
+      question: null,
+    });
   },
 });

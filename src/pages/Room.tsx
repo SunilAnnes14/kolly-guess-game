@@ -13,6 +13,7 @@ import { friendlyError } from "@/lib/utils";
 import { GameScreen } from "@/pages/room/GameScreen";
 import { Lobby } from "@/pages/room/Lobby";
 import { QuestionCreator } from "@/pages/room/QuestionCreator";
+import { Champion, RoundComplete } from "@/pages/room/ResultOverlays";
 import type { RoomState } from "@/pages/room/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMutation, useQuery } from "convex/react";
@@ -23,8 +24,8 @@ import { useNavigate, useParams } from "react-router";
 /**
  * `/room/ABX729` — the private screening.
  *
- * Identity is a secret token in localStorage: refreshes resume the same
- * seat, a fresh device always sees the join gate.
+ * Identity is a secret token in localStorage: refreshes resume the same seat,
+ * a fresh device always sees the join gate.
  */
 export default function Room() {
   const params = useParams();
@@ -32,7 +33,6 @@ export default function Room() {
   const [identity, setIdentity] = useState<RoomIdentity | null>(() =>
     loadIdentity(code),
   );
-  const advanceRound = useMutation(api.game.advanceRound);
   const room = useQuery(api.game.getRoom, {
     code,
     token: identity?.token ?? undefined,
@@ -47,14 +47,6 @@ export default function Room() {
   const switchPlayer = () => {
     clearIdentity(code);
     setIdentity(null);
-  };
-
-  const backToLobby = async () => {
-    try {
-      await advanceRound({ token, mode: "lobby" });
-    } catch {
-      // surfaced by the next state render if it matters
-    }
   };
 
   if (!room.me) {
@@ -77,16 +69,20 @@ export default function Room() {
   let view: ReactNode;
   switch (room.status) {
     case "lobby":
-      view = (
-        <Lobby room={room} token={token} onSwitchPlayer={switchPlayer} />
-      );
+      view = <Lobby room={room} token={token} onSwitchPlayer={switchPlayer} />;
       break;
     case "creating":
       view = room.me.isCreator ? (
-        <QuestionCreator room={room} token={token} onBack={backToLobby} />
+        <QuestionCreator room={room} token={token} />
       ) : (
         <CreatorWriting room={room} />
       );
+      break;
+    case "roundComplete":
+      view = <RoundComplete room={room} token={token} />;
+      break;
+    case "finished":
+      view = <Champion room={room} token={token} />;
       break;
     default:
       view = <GameScreen room={room} token={token} />;
@@ -198,6 +194,7 @@ function JoinGate({
   };
 
   const creator = room.players.find((p) => p.isCreator);
+  const host = room.players.find((p) => p.isHost);
 
   return (
     <div className="grid flex-1 place-items-center px-4 py-10">
@@ -215,10 +212,15 @@ function JoinGate({
           {code}
         </p>
         <p className="mt-3 text-sm text-white/60">
-          {creator ? (
+          {host ? (
             <>
-              <span className="font-semibold text-white/90">{creator.name}</span>{" "}
-              invited you to guess a Tamil movie.
+              <span className="font-semibold text-white/90">{host.name}</span>{" "}
+              invited you to a KOLLYWOOD game
+              {room.roundsTotal > 0 && creator ? (
+                <> — {creator.name} is on the mic right now.</>
+              ) : (
+                <>.</>
+              )}
             </>
           ) : (
             "You've been invited to a private screening."
@@ -271,7 +273,7 @@ function JoinGate({
   );
 }
 
-/** Guessers wait while the creator writes the next question. */
+/** Guessers wait while this round's creator writes the question. */
 function CreatorWriting({ room }: { room: RoomState }) {
   const creator = room.players.find((p) => p.isCreator);
   return (
@@ -283,10 +285,12 @@ function CreatorWriting({ room }: { room: RoomState }) {
       >
         <p className="text-4xl">🎬</p>
         <p className="font-display mt-4 text-2xl tracking-[0.14em] text-white">
-          THE CREATOR IS WRITING…
+          {creator?.name?.toUpperCase() ?? "THE CREATOR"} IS WRITING…
         </p>
         <p className="mt-3 text-sm leading-relaxed text-white/60">
-          {creator?.name} is picking four clues for you to crack. Get ready.
+          Round {room.round} of {room.roundsTotal}. They&apos;re picking four
+          clues for everyone to crack — your own nine chances start the moment
+          the question lands.
         </p>
         <span className="mt-5 flex items-center justify-center gap-2">
           <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />

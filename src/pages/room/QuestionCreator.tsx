@@ -7,7 +7,6 @@ import type { RoomState } from "@/pages/room/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMutation } from "convex/react";
 import {
-  ArrowLeft,
   Clapperboard,
   Heart,
   Loader2,
@@ -58,17 +57,18 @@ const FIELDS = [
 ] as const;
 
 /**
- * The question creator's desk: search the Tamil movie library or type your own
- * four parts, watch the "+" preview, then pull the CREATE QUESTION lever.
+ * This round's question creator: search the Tamil movie library or type your
+ * own four parts, watch the "+" preview, then pull the CREATE QUESTION lever.
+ *
+ * The whole room plays this exact question at the same time, each with their
+ * own nine chances — then the clapperboard passes to the next player.
  */
 export function QuestionCreator({
   room,
   token,
-  onBack,
 }: {
   room: RoomState;
   token: string;
-  onBack: () => void;
 }) {
   const submitQuestion = useMutation(api.game.submitQuestion);
   const [values, setValues] = useState({
@@ -87,6 +87,7 @@ export function QuestionCreator({
     [query],
   );
 
+  const guessers = Math.max(0, room.players.length - 1);
   const filled =
     values.hero.trim() &&
     values.heroine.trim() &&
@@ -129,15 +130,19 @@ export function QuestionCreator({
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         className="text-center"
       >
-        <p className="text-[11px] font-semibold tracking-[0.4em] text-primary/85 uppercase">
+        <p className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-semibold tracking-[0.4em] text-primary/85 uppercase">
+          <span className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 tracking-[0.18em]">
+            Round {room.round} / {room.roundsTotal}
+          </span>
           🎬 You&apos;re the question creator
         </p>
-        <h1 className="font-display mt-2 text-4xl tracking-[0.06em] text-white sm:text-5xl">
+        <h1 className="font-display mt-3 text-4xl tracking-[0.06em] text-white sm:text-5xl">
           Set the <span className="gold-text">four clues</span>
         </h1>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-white/60">
-          Hero, heroine, movie and song. Your friends only ever see the first
-          letters — and you judge every guess.
+          Hero, heroine, movie and song. {guessers}{" "}
+          {guessers === 1 ? "player" : "players"} get this exact question with
+          their own nine chances — and you judge every guess.
         </p>
       </motion.div>
 
@@ -286,13 +291,9 @@ export function QuestionCreator({
             )}
           </button>
 
-          <button
-            type="button"
-            onClick={onBack}
-            className="mt-3 flex w-full items-center justify-center gap-1.5 text-xs tracking-wider text-white/45 uppercase transition-colors hover:text-white/75"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> back to the lobby
-          </button>
+          <p className="mt-3 text-center text-xs text-white/40">
+            You sit this one out — the others are guessing.
+          </p>
         </motion.form>
 
         {/* ---------- live preview ---------- */}
@@ -303,7 +304,7 @@ export function QuestionCreator({
           className="glass-deep relative flex flex-col items-center rounded-3xl px-4 py-7"
         >
           <p className="text-[10px] font-semibold tracking-[0.32em] text-white/45 uppercase">
-            Your friends will see
+            Everyone will see
           </p>
           <div className="mt-5 w-full">
             <ClueCross
@@ -317,13 +318,12 @@ export function QuestionCreator({
           </div>
           <div className="gold-rule mt-3 w-full" />
           <p className="mt-3 px-2 text-center text-xs leading-relaxed text-white/50">
-            Four initials, nine shared chances. They must call the hero, the
+            Four initials, nine chances each. Everyone has to call the hero, the
             heroine, the movie and the song — in any order they like.
           </p>
-          {room.players.length > 1 ? (
+          {guessers > 0 ? (
             <p className="mt-2 text-center text-[11px] tracking-[0.18em] text-primary/70 uppercase">
-              {room.players.length - 1} friend
-              {room.players.length > 2 ? "s" : ""} ready to guess
+              {guessers} {guessers === 1 ? "player" : "players"} ready to guess
             </p>
           ) : (
             <p className="mt-2 text-center text-[11px] tracking-[0.18em] text-white/40 uppercase">
