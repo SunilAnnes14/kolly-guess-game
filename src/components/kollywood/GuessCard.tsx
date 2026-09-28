@@ -1,15 +1,18 @@
+import { CATEGORY_META } from "@/components/kollywood/categories";
 import { cn } from "@/lib/utils";
 import type { RoomGuess } from "@/pages/room/types";
 import { motion } from "framer-motion";
 import { Check, Clock3, X } from "lucide-react";
 
 /**
- * A submitted guess, shown as a cinematic card — pending while the creator
- * judges, ember-red when it burned a letter, gold when it nailed the movie.
+ * A submitted guess for one part, shown as a cinematic card — pending while
+ * the creator judges, ember-red when it burned a chance, gold when that part
+ * landed on the board.
  */
 export function GuessCard({ guess }: { guess: RoomGuess }) {
   const isPending = guess.status === "pending";
   const isCorrect = guess.status === "correct";
+  const meta = CATEGORY_META[guess.category];
 
   return (
     <motion.li
@@ -44,6 +47,10 @@ export function GuessCard({ guess }: { guess: RoomGuess }) {
         </span>
 
         <div className="min-w-0 flex-1">
+          <p className="mb-0.5 flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.2em] text-white/45 uppercase">
+            <span aria-hidden>{meta.icon}</span>
+            {meta.label}
+          </p>
           <p className="font-display truncate text-2xl leading-tight tracking-wide text-white">
             “{guess.text}”
           </p>

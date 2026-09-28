@@ -58,7 +58,7 @@ export function Lobby({
     try {
       await navigator.share({
         title: "KOLLYWOOD",
-        text: `Join my KOLLYWOOD room — guess the Tamil movie! Code ${room.code}`,
+        text: `Join my KOLLYWOOD room — crack the hero, heroine, movie and song! Code ${room.code}`,
         url: link,
       });
     } catch {

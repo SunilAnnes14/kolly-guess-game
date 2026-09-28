@@ -2,7 +2,12 @@ import { GuessCard } from "@/components/kollywood/GuessCard";
 import { Leaderboard } from "@/components/kollywood/Leaderboard";
 import { LivesRow } from "@/components/kollywood/LivesRow";
 import { PlayersPanel } from "@/components/kollywood/PlayersPanel";
-import { ClueCross } from "@/components/kollywood/ClueCross";
+import { PlusBoard } from "@/components/kollywood/PlusBoard";
+import {
+  CATEGORY_META,
+  CATEGORY_ORDER,
+  type Category,
+} from "@/components/kollywood/categories";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import { cn, friendlyError } from "@/lib/utils";
@@ -10,12 +15,19 @@ import type { RoomState } from "@/pages/room/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMutation } from "convex/react";
 import { Check, Lightbulb, Loader2, Sparkles, X } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { GameOverOverlay, WinOverlay } from "./ResultOverlays";
 
 /**
- * The game screen: clue cross, KOLLYWOOD lives, guessing desk / judge's
- * desk, clue spotlight, guess history, players and leaderboard.
+ * The game screen: the four-part "+" board, the shared KOLLYWOOD chances,
+ * the guessing desk / judge's desk, the clue spotlight, guess history and the
+ * room standings.
  */
 export function GameScreen({
   room,
@@ -24,19 +36,56 @@ export function GameScreen({
   room: RoomState;
   token: string;
 }) {
-  const pendingGuess = room.guesses.find((g) => g.status === "pending");
-  const correctGuess = room.guesses.find((g) => g.status === "correct");
   const isCreator = !!room.me?.isCreator;
+  const question = room.question;
+  const correctGuess = room.guesses.find((g) => g.status === "correct");
+
+  // Which part the guesser wants to attack next.
+  const [selected, setSelected] = useState<Category | null>(null);
+  // Drives the "burned a chance" shake on the part that just failed.
+  const [impact, setImpact] = useState<{ category: Category; id: number } | null>(
+    null,
+  );
+  const previousWrong = useRef(room.wrongGuesses);
+
+  // A fresh round always starts on a part nobody has cracked yet.
+  useEffect(() => {
+    const open = CATEGORY_ORDER.filter((c) => !room.question?.revealed[c]);
+    setSelected(open[0] ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.round]);
+
+  // Once a part is discovered, move the spotlight on to the next one.
+  useEffect(() => {
+    if (selected && question?.revealed[selected]) {
+      setSelected(CATEGORY_ORDER.find((c) => !question.revealed[c]) ?? null);
+    }
+  }, [selected, question?.revealed]);
+
+  // Every wrong guess shakes the part that just failed.
+  useEffect(() => {
+    if (room.wrongGuesses > previousWrong.current) {
+      const lastWrong = [...room.guesses]
+        .reverse()
+        .find((g) => g.status === "wrong");
+      setImpact({
+        category: (lastWrong?.category as Category) ?? "movie",
+        id: Date.now(),
+      });
+    }
+    previousWrong.current = room.wrongGuesses;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.wrongGuesses]);
 
   return (
     <>
       <div className="mx-auto grid w-full max-w-6xl flex-1 gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1fr)_300px]">
         <section className="flex min-w-0 flex-col gap-5">
-          {/* ---------- clue + lives + desk ---------- */}
-          <div className="glass-deep relative overflow-hidden rounded-3xl px-4 py-6 sm:px-8 sm:py-8">
+          {/* ---------- the board ---------- */}
+          <div className="glass-deep relative overflow-hidden rounded-3xl px-3 py-6 sm:px-8 sm:py-8">
             <div className="flex flex-wrap items-center justify-center gap-2">
               <span className="text-[10px] font-semibold tracking-[0.35em] text-white/45 uppercase sm:text-[11px]">
-                Current question
+                The four clues
               </span>
               {isCreator && (
                 <span className="rounded-full border border-primary/35 bg-primary/10 px-2.5 py-1 text-[9px] font-semibold tracking-[0.16em] text-primary uppercase">
@@ -48,21 +97,27 @@ export function GameScreen({
                   🎯 your turn
                 </span>
               )}
-              {pendingGuess && (
-                <span className="rounded-full border border-[#7c5cff]/45 bg-[#7c5cff]/15 px-2.5 py-1 text-[9px] font-semibold tracking-[0.16em] text-[#b8a8ff] uppercase">
-                  ⏳ judging
-                </span>
-              )}
             </div>
 
-            <div className="mt-5">
-              {room.question && (
-                <ClueCross key={room.round} initials={room.question.initials} />
-              )}
-            </div>
+            {question ? (
+              <div className="mt-6">
+                <PlusBoard
+                  initials={question.initials}
+                  revealed={question.revealed}
+                  values={question.values}
+                  selected={selected}
+                  onSelect={isCreator ? undefined : setSelected}
+                  impact={impact}
+                />
+              </div>
+            ) : (
+              <p className="mt-8 text-center text-sm text-white/50">
+                Waiting for the first question…
+              </p>
+            )}
 
-            {/* ---------- nine lives ---------- */}
-            <div className="mt-6 flex flex-col items-center gap-3.5">
+            {/* ---------- nine shared chances ---------- */}
+            <div className="mt-7 flex flex-col items-center gap-3.5">
               <p
                 className={cn(
                   "text-[11px] font-semibold tracking-[0.3em] uppercase sm:text-xs",
@@ -71,7 +126,8 @@ export function GameScreen({
                     : "text-primary/80",
                 )}
               >
-                {room.lives} {room.lives === 1 ? "chance" : "chances"} remaining
+                {room.lives} {room.lives === 1 ? "chance" : "chances"} left — one
+                pool for all four
               </p>
               <LivesRow lives={room.lives} />
             </div>
@@ -91,10 +147,16 @@ export function GameScreen({
                 <div className="flex items-start gap-3">
                   <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   <div>
-                    <p className="text-[10px] font-semibold tracking-[0.3em] text-primary/85 uppercase">
+                    <p className="flex flex-wrap items-center gap-2 text-[10px] font-semibold tracking-[0.3em] text-primary/85 uppercase">
                       Spotlight clue
+                      {room.clueCategory && (
+                        <span className="rounded-full border border-primary/40 px-2 py-0.5 tracking-[0.16em] text-primary/90">
+                          {CATEGORY_META[room.clueCategory].icon}{" "}
+                          {CATEGORY_META[room.clueCategory].label}
+                        </span>
+                      )}
                     </p>
-                    <p className="mt-1 text-sm leading-relaxed text-white/85 italic sm:text-base">
+                    <p className="mt-1.5 text-sm leading-relaxed text-white/85 italic sm:text-base">
                       “{room.clue}”
                     </p>
                   </div>
@@ -107,7 +169,12 @@ export function GameScreen({
               {isCreator ? (
                 <JudgeDesk room={room} token={token} />
               ) : (
-                <GuesserDesk room={room} token={token} />
+                <GuesserDesk
+                  room={room}
+                  token={token}
+                  selected={selected}
+                  onSelect={setSelected}
+                />
               )}
             </div>
           </div>
@@ -153,10 +220,71 @@ export function GameScreen({
 }
 
 /* ------------------------------------------------------------------ */
-/* Guesser: the cinematic guess desk                                   */
+/* Guesser: pick a part, then guess it                                 */
 /* ------------------------------------------------------------------ */
 
-function GuesserDesk({ room, token }: { room: RoomState; token: string }) {
+function CategoryPicker({
+  room,
+  selected,
+  onSelect,
+  compact = false,
+}: {
+  room: RoomState;
+  selected: Category | null;
+  onSelect: (category: Category) => void;
+  compact?: boolean;
+}) {
+  const revealed = room.question?.revealed;
+
+  return (
+    <div
+      className={cn(
+        "grid gap-2",
+        compact ? "grid-cols-4" : "grid-cols-2 sm:grid-cols-4",
+      )}
+    >
+      {CATEGORY_ORDER.map((category) => {
+        const meta = CATEGORY_META[category];
+        const found = !!revealed?.[category];
+        const active = selected === category;
+        return (
+          <button
+            key={category}
+            type="button"
+            disabled={found}
+            onClick={() => onSelect(category)}
+            aria-pressed={active}
+            className={cn(
+              "flex items-center justify-center gap-1.5 rounded-xl border font-semibold transition-all",
+              compact ? "h-10 text-[11px]" : "h-12 text-sm",
+              found
+                ? "cursor-default border-primary/35 bg-primary/[0.07] text-primary/70"
+                : active
+                  ? "-translate-y-0.5 border-primary/70 bg-primary/15 text-primary shadow-[0_8px_24px_rgba(245,197,66,0.2)]"
+                  : "border-white/12 bg-white/[0.04] text-white/70 hover:-translate-y-0.5 hover:border-primary/45 hover:text-white",
+            )}
+          >
+            <span aria-hidden>{meta.icon}</span>
+            {meta.label}
+            {found && <Check className="h-3.5 w-3.5" />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function GuesserDesk({
+  room,
+  token,
+  selected,
+  onSelect,
+}: {
+  room: RoomState;
+  token: string;
+  selected: Category | null;
+  onSelect: (category: Category) => void;
+}) {
   const submitGuess = useMutation(api.game.submitGuess);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -185,18 +313,18 @@ function GuesserDesk({ room, token }: { room: RoomState; token: string }) {
       <StatusBlock
         icon="🎯"
         title={turn ? `Waiting for ${turn.name}` : "Waiting for the next guess"}
-        body="The mic is passed around — your turn is coming."
+        body="The mic is passed around — pick your part when it's your turn."
       />
     );
   }
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!text.trim()) return;
+    if (!selected || !text.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      await submitGuess({ token, text });
+      await submitGuess({ token, category: selected, text });
       setText("");
     } catch (err) {
       setError(friendlyError(err));
@@ -205,44 +333,53 @@ function GuesserDesk({ room, token }: { room: RoomState; token: string }) {
     }
   };
 
+  const meta = selected ? CATEGORY_META[selected] : null;
+
   return (
-    <form onSubmit={handleSubmit} className="grid gap-3">
+    <form onSubmit={handleSubmit} className="grid gap-3.5">
       <p className="text-center text-[11px] font-semibold tracking-[0.3em] text-primary uppercase">
-        🎯 Your turn — name that movie
+        🎯 Your turn — what do you want to guess?
       </p>
+
+      <CategoryPicker room={room} selected={selected} onSelect={onSelect} />
+
       <div className="flex flex-col gap-2.5 sm:flex-row">
         <Input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="What movie is this?"
+          placeholder={meta ? meta.placeholder : "Pick a part above first"}
+          disabled={!selected}
           maxLength={90}
           autoComplete="off"
           className="h-14 flex-1 rounded-2xl border-white/15 bg-white/5 text-center text-lg placeholder:text-white/30 focus-visible:border-primary/60 focus-visible:ring-primary/30 sm:text-left"
         />
         <button
           type="submit"
-          disabled={busy || !text.trim()}
+          disabled={busy || !text.trim() || !selected}
           className={cn(
             "kolly-cta flex h-14 items-center justify-center gap-2 rounded-2xl px-8 text-base font-semibold tracking-wide transition-all",
-            text.trim()
+            text.trim() && selected
               ? "bg-primary text-primary-foreground shadow-[0_10px_34px_rgba(245,197,66,0.3)] hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(245,197,66,0.45)] active:translate-y-0"
               : "cursor-not-allowed border border-white/10 bg-white/[0.04] text-white/35",
           )}
         >
-          {busy ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            "SUBMIT GUESS"
-          )}
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "SUBMIT GUESS"}
         </button>
       </div>
+
+      {meta && (
+        <p className="text-center text-[11px] tracking-[0.18em] text-white/40 uppercase">
+          {meta.icon} {meta.ask} · {room.lives} shared{" "}
+          {room.lives === 1 ? "chance" : "chances"} on the line
+        </p>
+      )}
       {error && <p className="text-center text-sm text-[#ff7a55]">{error}</p>}
     </form>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Creator: the judge's desk + clue unlock                             */
+/* Creator: judge the guess, then (maybe) drop the clue                */
 /* ------------------------------------------------------------------ */
 
 function JudgeDesk({ room, token }: { room: RoomState; token: string }) {
@@ -279,9 +416,15 @@ function JudgeDesk({ room, token }: { room: RoomState; token: string }) {
             aria-hidden
             className="animate-sweep pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-primary/20 to-transparent"
           />
-          <p className="text-[11px] font-semibold tracking-[0.35em] text-primary uppercase">
-            Player guess
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[11px] font-semibold tracking-[0.35em] text-primary uppercase">
+              Player guess
+            </p>
+            <span className="rounded-full border border-primary/45 bg-primary/10 px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.16em] text-primary uppercase">
+              {CATEGORY_META[pending.category].icon}{" "}
+              {CATEGORY_META[pending.category].label}
+            </span>
+          </div>
           <p className="mt-1 text-sm text-white/55">
             {pending.playerName} says…
           </p>
@@ -321,13 +464,43 @@ function JudgeDesk({ room, token }: { room: RoomState; token: string }) {
           title="Waiting for a guess"
           body={
             turn
-              ? `${turn.name} has the mic — keep the cross on screen.`
+              ? `${turn.name} has the mic — keep the answer key handy.`
               : "The next guesser is stepping up…"
           }
         />
       )}
 
+      <AnswerKey room={room} />
       <ClueControls room={room} token={token} />
+    </div>
+  );
+}
+
+/** The creator's cheat sheet — they need it to call every guess. */
+function AnswerKey({ room }: { room: RoomState }) {
+  const values = room.question?.values;
+  if (!values || room.status !== "playing") return null;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3.5">
+      <p className="text-[10px] font-semibold tracking-[0.3em] text-white/45 uppercase">
+        🔒 Your answer key
+      </p>
+      <ul className="mt-2.5 grid gap-1.5 sm:grid-cols-2">
+        {CATEGORY_ORDER.map((category) => {
+          const meta = CATEGORY_META[category];
+          const found = !!room.question?.revealed[category];
+          return (
+            <li key={category} className="flex items-center gap-2 text-sm">
+              <span aria-hidden>{meta.icon}</span>
+              <span className="min-w-0 flex-1 truncate text-white/85">
+                {values[category] ?? "—"}
+              </span>
+              {found && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -335,6 +508,7 @@ function JudgeDesk({ room, token }: { room: RoomState; token: string }) {
 function ClueControls({ room, token }: { room: RoomState; token: string }) {
   const createClue = useMutation(api.game.createClue);
   const [text, setText] = useState("");
+  const [category, setCategory] = useState<Category>("movie");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -343,9 +517,9 @@ function ClueControls({ room, token }: { room: RoomState; token: string }) {
   if (!room.clueUnlocked) {
     if (room.wrongGuesses === 0) return null;
     return (
-      <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-center text-[11px] tracking-wider text-white/45">
+      <div className="flex flex-wrap items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-center text-[11px] tracking-wider text-white/45">
         <Lightbulb className="h-3.5 w-3.5" />
-        Clue unlocks after 5 wrong guesses
+        Clue unlocks after 5 chances used
         <span className="flex gap-1">
           {Array.from({ length: 5 }, (_, index) => (
             <span
@@ -368,7 +542,7 @@ function ClueControls({ room, token }: { room: RoomState; token: string }) {
     setBusy(true);
     setError(null);
     try {
-      await createClue({ token, text });
+      await createClue({ token, category, text });
       setText("");
     } catch (err) {
       setError(friendlyError(err));
@@ -389,9 +563,20 @@ function ClueControls({ room, token }: { room: RoomState; token: string }) {
         <Sparkles className="h-3.5 w-3.5" /> Clue available
       </p>
       <p className="mt-1 text-xs text-white/55">
-        Drop one hint for everyone — only one clue per question.
+        Pick the part it hints at, then drop one hint — only one clue per
+        question.
       </p>
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+
+      <div className="mt-3">
+        <CategoryPicker
+          compact
+          room={room}
+          selected={category}
+          onSelect={setCategory}
+        />
+      </div>
+
+      <div className="mt-2.5 flex flex-col gap-2 sm:flex-row">
         <Input
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -408,7 +593,7 @@ function ClueControls({ room, token }: { room: RoomState; token: string }) {
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <>
-              <Lightbulb className="h-4 w-4" /> DROP CLUE
+              <Lightbulb className="h-4 w-4" /> GIVE CLUE
             </>
           )}
         </button>
@@ -427,7 +612,7 @@ function StatusBlock({
 }: {
   icon: string;
   title: string;
-  body: string;
+  body: ReactNode;
 }) {
   return (
     <motion.div

@@ -8,6 +8,14 @@ import { useMemo, useState, type ReactNode } from "react";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
+/** The four parts, in board order, with the emoji the board uses. */
+const PARTS = [
+  { key: "hero", icon: "👨", label: "Hero" },
+  { key: "heroine", icon: "👩", label: "Heroine" },
+  { key: "movie", icon: "🎬", label: "Movie" },
+  { key: "song", icon: "🎵", label: "Song" },
+] as const;
+
 /* ------------------------------------------------------------------ */
 /* Shared bits                                                         */
 /* ------------------------------------------------------------------ */
@@ -73,6 +81,47 @@ function Confetti() {
         />
       ))}
     </div>
+  );
+}
+
+/** Who discovered what — the four-line scorecard under the movie title. */
+function PartsReveal({
+  room,
+  delay = 0.75,
+}: {
+  room: RoomState;
+  delay?: number;
+}) {
+  const values = room.question?.values;
+  if (!values) return null;
+
+  return (
+    <motion.ul
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, duration: 0.5, ease: EASE }}
+      className="mx-auto mt-5 grid max-w-sm gap-2 text-left"
+    >
+      {PARTS.map((part, index) => (
+        <motion.li
+          key={part.key}
+          initial={{ opacity: 0, x: -14 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: delay + index * 0.09, duration: 0.45, ease: EASE }}
+          className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5"
+        >
+          <span aria-hidden className="text-base">
+            {part.icon}
+          </span>
+          <span className="w-16 shrink-0 text-[10px] font-semibold tracking-[0.2em] text-white/45 uppercase">
+            {part.label}
+          </span>
+          <span className="font-display min-w-0 flex-1 truncate text-lg tracking-wide text-white">
+            {values[part.key] ?? "—"}
+          </span>
+        </motion.li>
+      ))}
+    </motion.ul>
   );
 }
 
@@ -193,7 +242,7 @@ function OverlayShell({
 }
 
 /* ------------------------------------------------------------------ */
-/* Win                                                                 */
+/* Win — all four parts discovered                                     */
 /* ------------------------------------------------------------------ */
 
 export function WinOverlay({
@@ -208,7 +257,6 @@ export function WinOverlay({
   const question = room.question;
   if (!question) return null;
 
-  const pointsEarned = 300 + room.lives * 50;
   const iWon = !!room.me && room.me.name === winnerName;
 
   return (
@@ -219,49 +267,54 @@ export function WinOverlay({
         transition={{ delay: 0.1, duration: 0.5, ease: EASE }}
         className="font-display text-3xl tracking-[0.14em] gold-text sm:text-4xl"
       >
-        🎬 YOU GOT IT!
+        🎉 YOU SOLVED IT!
       </motion.p>
-
-      <div className="mt-5">
-        <RevealWord
-          text={question.movie ?? ""}
-          className="font-display text-glow-gold text-6xl leading-none tracking-[0.05em] gold-text sm:text-7xl"
-        />
-      </div>
 
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.7, duration: 0.5 }}
-        className="mt-5 text-sm font-semibold tracking-[0.24em] text-primary uppercase"
+        transition={{ delay: 0.25, duration: 0.4 }}
+        className="mt-3 text-[10px] font-semibold tracking-[0.34em] text-primary/80 uppercase"
       >
-        ⭐ {room.lives} / 9 chances left
+        All four clues discovered
       </motion.p>
 
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.85, duration: 0.5, ease: EASE }}
-        className="mt-5 grid gap-1.5 text-sm text-white/65"
+      <div className="mt-3">
+        <RevealWord
+          text={question.values.movie ?? ""}
+          className="font-display text-glow-gold text-6xl leading-none tracking-[0.05em] gold-text sm:text-7xl"
+        />
+      </div>
+
+      <PartsReveal room={room} />
+
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.2, duration: 0.5 }}
+        className="mt-6 text-sm font-semibold tracking-[0.24em] text-primary uppercase"
       >
-        <p>
-          “<span className="text-white/90">{question.song}</span>” ·{" "}
-          {question.hero} &amp; {question.heroine}
-        </p>
-        <p>
-          {winnerName ? (
-            iWon ? (
-              <span className="font-semibold text-primary">
-                You called it first! +{pointsEarned} points
-              </span>
-            ) : (
-              <span className="font-semibold text-primary">
-                {winnerName} called it first · +{pointsEarned} points
-              </span>
-            )
-          ) : null}
-        </p>
-      </motion.div>
+        ⭐ Chances remaining: {room.lives} / 9
+      </motion.p>
+
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.35, duration: 0.5 }}
+        className="mt-2 text-sm text-white/65"
+      >
+        {winnerName ? (
+          iWon ? (
+            <span className="font-semibold text-primary">
+              You cracked the last piece!
+            </span>
+          ) : (
+            <span className="font-semibold text-primary">
+              {winnerName} cracked the last piece!
+            </span>
+          )
+        ) : null}
+      </motion.p>
 
       <div className="gold-rule mx-auto mt-6 w-2/3" />
 
@@ -277,7 +330,7 @@ export function WinOverlay({
 }
 
 /* ------------------------------------------------------------------ */
-/* Game over                                                           */
+/* Game over — the nine chances ran out                                */
 /* ------------------------------------------------------------------ */
 
 export function GameOverOverlay({
@@ -290,6 +343,8 @@ export function GameOverOverlay({
   const question = room.question;
   if (!question) return null;
 
+  const solved = room.question?.solvedCount ?? 0;
+
   return (
     <OverlayShell tone="ember">
       <motion.p
@@ -298,7 +353,7 @@ export function GameOverOverlay({
         transition={{ duration: 0.6, ease: EASE }}
         className="font-display text-4xl tracking-[0.14em] text-[#ff7a55] text-glow-ember sm:text-5xl"
       >
-        🎞️ GAME OVER
+        🎞️ THE MOVIE GOT AWAY!
       </motion.p>
 
       <motion.p
@@ -307,7 +362,7 @@ export function GameOverOverlay({
         transition={{ delay: 0.4, duration: 0.5 }}
         className="mt-3 text-xs font-semibold tracking-[0.34em] text-white/60 uppercase"
       >
-        The film got away!
+        {solved} / 4 parts found · 9 chances gone
       </motion.p>
 
       <motion.p
@@ -321,19 +376,12 @@ export function GameOverOverlay({
 
       <div className="mt-2.5">
         <RevealWord
-          text={question.movie ?? ""}
+          text={question.values.movie ?? ""}
           className="font-display text-glow-gold text-6xl leading-none tracking-[0.05em] gold-text sm:text-7xl"
         />
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.05, duration: 0.5, ease: EASE }}
-        className="mt-4 text-sm text-white/60"
-      >
-        “{question.song}” · {question.hero} &amp; {question.heroine}
-      </motion.div>
+      <PartsReveal room={room} delay={1.05} />
 
       <div className="gold-rule mx-auto mt-6 w-2/3" />
 

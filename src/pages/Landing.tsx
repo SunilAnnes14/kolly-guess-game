@@ -1,5 +1,6 @@
 import { ClueCross } from "@/components/kollywood/ClueCross";
 import { LivesRow } from "@/components/kollywood/LivesRow";
+import { PlusBoard } from "@/components/kollywood/PlusBoard";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -68,13 +69,37 @@ const STEPS = [
   },
   {
     n: "02",
-    title: "Drop a question",
-    body: "Hero, heroine, movie, song — everyone else only ever sees the four first letters.",
+    title: "Set the four clues",
+    body: "Hero, heroine, movie and song. Everyone else only ever gets the first letter of each.",
   },
   {
     n: "03",
-    title: "Guess or judge",
-    body: "Nine KOLLYWOOD lives on the line. The creator approves every single guess.",
+    title: "Guess, judge, reveal",
+    body: "Players pick one part and guess just that. The creator approves every call — right answers light up the board.",
+  },
+];
+
+/** The GUESS → APPROVAL → REVEAL loop that drives a round. */
+const LOOP = [
+  {
+    icon: "🎯",
+    title: "Pick a part",
+    body: "Four buttons — hero, heroine, movie or song. Attack them in whatever order you like.",
+  },
+  {
+    icon: "👑",
+    title: "The creator judges",
+    body: "Nothing is auto-marked. The friend running the round calls your guess right or wrong.",
+  },
+  {
+    icon: "✨",
+    title: "Reveal or burn",
+    body: "A correct call flips that part to the full answer. A miss burns one KOLLYWOOD letter.",
+  },
+  {
+    icon: "🏆",
+    title: "Solve all four",
+    body: "Get hero, heroine, movie and song on the board and the round is yours.",
   },
 ];
 
@@ -218,7 +243,7 @@ export default function Landing() {
             transition={{ delay: 1.05, duration: 0.7, ease: EASE }}
             className="mt-4 max-w-xl text-lg text-white/85 sm:text-2xl"
           >
-            Guess the movie. Challenge your friends.
+            Guess the hero. The heroine. The movie. The song.
           </motion.p>
 
           <motion.div
@@ -334,9 +359,88 @@ export default function Landing() {
                 <span className="text-primary">Appadi Podu</span>
               </p>
               <p className="mt-1 text-center text-xs text-white/45">
-                Your friends only see the first letters.
+                Your friends only get the first letter of each part.
               </p>
             </motion.div>
+          </div>
+        </section>
+
+        {/* ---------- progressive discovery ---------- */}
+        <section className="mx-auto w-full max-w-6xl px-5 pb-20 sm:pb-24">
+          <div className="mb-10 text-center">
+            <p className="text-[11px] font-semibold tracking-[0.4em] text-primary/80 uppercase">
+              Guess · approve · reveal
+            </p>
+            <h2 className="font-display mt-3 text-4xl tracking-[0.06em] text-white sm:text-5xl">
+              Four parts.{" "}
+              <span className="gold-text">Discover them one by one.</span>
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-white/60 sm:text-base">
+              Nobody has to know the whole film. Pick the part you&apos;re sure
+              about and guess just that — each answer you land lights up the
+              &ldquo;+&rdquo; a little more.
+            </p>
+          </div>
+
+          <div className="grid items-center gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.7, ease: EASE }}
+              className="glass-deep rounded-3xl px-4 py-8 sm:px-8"
+            >
+              <p className="text-center text-[10px] font-semibold tracking-[0.35em] text-white/45 uppercase">
+                Two parts found
+              </p>
+              <div className="mt-6">
+                <PlusBoard
+                  initials={{ hero: "V", heroine: "T", movie: "G", song: "A" }}
+                  revealed={{
+                    hero: true,
+                    heroine: true,
+                    movie: false,
+                    song: false,
+                  }}
+                  values={{
+                    hero: "Vijay",
+                    heroine: "Trisha",
+                    movie: null,
+                    song: null,
+                  }}
+                />
+              </div>
+              <div className="gold-rule mt-6" />
+              <p className="mt-4 text-center text-sm leading-relaxed text-white/65">
+                ✓ Vijay and Trisha are on the board. The movie and the song are
+                still hiding behind their initials.
+              </p>
+            </motion.div>
+
+            <div className="grid gap-3">
+              {LOOP.map((step, index) => (
+                <motion.div
+                  key={step.title}
+                  initial={{ opacity: 0, x: 26 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true, margin: "-60px" }}
+                  transition={{ delay: index * 0.09, duration: 0.6, ease: EASE }}
+                  className="glass flex items-start gap-4 rounded-2xl p-5 transition-colors hover:border-primary/30"
+                >
+                  <span aria-hidden className="text-2xl leading-none">
+                    {step.icon}
+                  </span>
+                  <div>
+                    <h3 className="text-base font-semibold text-white">
+                      {step.title}
+                    </h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-white/60">
+                      {step.body}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -355,12 +459,10 @@ export default function Landing() {
             <div className="mt-6">
               <LivesRow lives={6} />
             </div>
-            <p className="mx-auto mt-6 max-w-md text-sm leading-relaxed text-white/65">
-              Every wrong guess burns a letter of{" "}
-              <span className="font-display tracking-[0.2em] text-primary">
-                KOLLYWOOD
-              </span>
-              . Nine misses and the film gets away.
+            <p className="mx-auto mt-6 max-w-lg text-sm leading-relaxed text-white/65">
+              One shared pool of nine for the whole question — the hero, the
+              heroine, the movie and the song all draw from the same letters.
+              Burn all nine and the film gets away.
             </p>
           </motion.div>
         </section>

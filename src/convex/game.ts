@@ -6,15 +6,51 @@ import { mutation, query } from "./_generated/server";
 /** Room codes look like ABX729 — no ambiguous 0/O or 1/I. */
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 6;
-/** K · O · L · L · Y · W · O · O · D */
+/** K · O · L · L · Y · W · O · O · D — one shared pool for all four parts. */
 export const MAX_LIVES = 9;
-/** After this many wrong guesses the creator may drop a clue. */
+/** Wrong guesses consumed before the creator may drop a clue. */
 export const CLUE_UNLOCK_AT = 5;
 const MAX_PLAYERS = 12;
 const MAX_NAME = 18;
 const MAX_GUESS = 90;
 
+/** The four independent parts of every question, in board order. */
+export const CATEGORY_ORDER = ["hero", "heroine", "movie", "song"] as const;
+export type Category = (typeof CATEGORY_ORDER)[number];
+
+type Revealed = Record<Category, boolean>;
+
+const categoryValidator = v.union(
+  v.literal("hero"),
+  v.literal("heroine"),
+  v.literal("movie"),
+  v.literal("song"),
+);
+
+function emptyRevealed(): Revealed {
+  return { hero: false, heroine: false, movie: false, song: false };
+}
+
+/** Rooms created before the four-part board show nothing as found yet. */
+function revealedOf(room: { revealed?: Revealed | null }): Revealed {
+  return { ...emptyRevealed(), ...(room.revealed ?? {}) };
+}
+
 type Ctx = QueryCtx | MutationCtx;
+type Question = NonNullable<Doc<"rooms">["question"]>;
+
+function answerFor(question: Question, category: Category): string {
+  switch (category) {
+    case "hero":
+      return question.hero;
+    case "heroine":
+      return question.heroine;
+    case "movie":
+      return question.movie;
+    case "song":
+      return question.song;
+  }
+}
 
 function generateCode(): string {
   let code = "";
@@ -121,7 +157,9 @@ export const createRoom = mutation({
       round: 1,
       lives: MAX_LIVES,
       wrongGuesses: 0,
+      revealed: emptyRevealed(),
       clue: "",
+      clueCategory: null,
       question: null,
       createdAt: now,
     });
@@ -185,9 +223,12 @@ export const joinRoom = mutation({
 /* ------------------------------------------------------------------ */
 
 /**
- * The whole room, live. The answer (and the full hero/heroine/song names)
- * are only included for the question creator — and for everyone once the
- * round is revealed (won / over).
+ * The whole room, live.
+ *
+ * `question.revealed` is the honest public board — which parts have been
+ * cracked. `question.values` only carries a part's answer once it has been
+ * discovered (or for the creator, who needs the answer key to judge, or once
+ * the round is over). The initials are always visible: they are the clue.
  */
 export const getRoom = query({
   args: { code: v.string(), token: v.optional(v.string()) },
@@ -205,13 +246,17 @@ export const getRoom = query({
       : null;
     const isCreator = !!me && me._id === room.creatorId;
 
+    const solved = revealedOf(room);
+    const finished = room.status === "won" || room.status === "over";
     const questionVisible =
       room.question !== null &&
       (room.status === "playing" ||
         room.status === "won" ||
         room.status === "over");
-    const revealAnswer =
-      isCreator || room.status === "won" || room.status === "over";
+    // The creator judges every guess, so they always hold the answer key.
+    const holdsAnswerKey = isCreator || finished;
+    const canSee = (category: Category) =>
+      holdsAnswerKey || solved[category];
 
     const guesses = questionVisible
       ? await ctx.db
@@ -222,13 +267,18 @@ export const getRoom = query({
           .collect()
       : [];
 
+    const question = room.question;
+    const solvedCount = CATEGORY_ORDER.filter((c) => solved[c]).length;
+
     return {
       code: room.code,
       status: room.status,
       round: room.round,
       lives: room.lives,
       wrongGuesses: room.wrongGuesses,
+      chancesUsed: MAX_LIVES - room.lives,
       clue: room.clue,
+      clueCategory: room.clueCategory ?? null,
       clueUnlocked: room.wrongGuesses >= CLUE_UNLOCK_AT && room.clue === "",
       hasPendingGuess: room.pendingGuessId !== null,
       myTurn:
@@ -236,19 +286,23 @@ export const getRoom = query({
         room.pendingGuessId === null &&
         !!me &&
         me._id === room.currentTurnId,
-      question: room.question
+      question: question
         ? {
             initials: {
-              hero: room.question.heroInitial,
-              heroine: room.question.heroineInitial,
-              movie: room.question.movieInitial,
-              song: room.question.songInitial,
+              hero: question.heroInitial,
+              heroine: question.heroineInitial,
+              movie: question.movieInitial,
+              song: question.songInitial,
             },
-            hero: questionVisible && revealAnswer ? room.question.hero : null,
-            heroine:
-              questionVisible && revealAnswer ? room.question.heroine : null,
-            movie: questionVisible && revealAnswer ? room.question.movie : null,
-            song: questionVisible && revealAnswer ? room.question.song : null,
+            revealed: solved,
+            values: {
+              hero: canSee("hero") ? question.hero : null,
+              heroine: canSee("heroine") ? question.heroine : null,
+              movie: canSee("movie") ? question.movie : null,
+              song: canSee("song") ? question.song : null,
+            },
+            solvedCount,
+            complete: solvedCount === CATEGORY_ORDER.length,
           }
         : null,
       me: me
@@ -268,6 +322,8 @@ export const getRoom = query({
         .sort((a, b) => a.createdAt - b.createdAt)
         .map((g) => ({
           id: g._id,
+          // Legacy guesses predate the four-part board.
+          category: (g.category ?? "movie") as Category,
           text: g.text,
           status: g.status,
           playerName: g.playerName,
@@ -322,7 +378,7 @@ export const submitQuestion = mutation({
     const movie = args.movie.trim();
     const song = args.song.trim();
     if (!hero || !heroine || !movie || !song) {
-      throw new Error("Fill in all four clues to create the question.");
+      throw new Error("Fill in all four parts to create the question.");
     }
     if (movie.length > 80 || song.length > 80 || hero.length > 60 || heroine.length > 60) {
       throw new Error("One of those entries is too long.");
@@ -348,16 +404,23 @@ export const submitQuestion = mutation({
       },
       lives: MAX_LIVES,
       wrongGuesses: 0,
+      revealed: emptyRevealed(),
       clue: "",
+      clueCategory: null,
       pendingGuessId: null,
       currentTurnId: rotation[0]._id,
     });
   },
 });
 
+/** A guess for ONE part — hero, heroine, movie or song. */
 export const submitGuess = mutation({
-  args: { token: v.string(), text: v.string() },
-  handler: async (ctx, { token, text }) => {
+  args: {
+    token: v.string(),
+    category: categoryValidator,
+    text: v.string(),
+  },
+  handler: async (ctx, { token, category, text }) => {
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
     if (!room) throw new Error("Room not found.");
@@ -371,6 +434,10 @@ export const submitGuess = mutation({
     if (room.pendingGuessId !== null) {
       throw new Error("A guess is waiting to be judged.");
     }
+    const solved = revealedOf(room);
+    if (solved[category]) {
+      throw new Error("That part is already on the board.");
+    }
 
     const clean = cleanGuess(text);
     const now = Date.now();
@@ -379,6 +446,7 @@ export const submitGuess = mutation({
       playerId: player._id,
       playerName: player.name,
       round: room.round,
+      category,
       text: clean,
       status: "pending",
       createdAt: now,
@@ -388,6 +456,11 @@ export const submitGuess = mutation({
   },
 });
 
+/**
+ * The creator is the only judge. A correct call reveals that part — and the
+ * guesser keeps the mic to hunt the next one. A wrong call burns one of the
+ * nine shared KOLLYWOOD letters and passes the turn.
+ */
 export const judgeGuess = mutation({
   args: { token: v.string(), guessId: v.id("guesses"), correct: v.boolean() },
   handler: async (ctx, { token, guessId, correct }) => {
@@ -405,19 +478,36 @@ export const judgeGuess = mutation({
     if (!guess || guess.roomId !== room._id) throw new Error("Guess not found.");
     const guesser = await ctx.db.get(guess.playerId);
     if (!guesser) throw new Error("Guess player not found.");
+    const category: Category = guess.category ?? "movie";
 
     if (correct) {
-      // Score rewards finishing with lives to spare.
-      const gained = 300 + room.lives * 50;
+      const revealed = revealedOf(room);
+      revealed[category] = true;
+      const complete = CATEGORY_ORDER.every((c) => revealed[c]);
+      // Small reward per part, bigger reward for closing the board out.
+      const gained = complete ? 500 : 150;
+
       await ctx.db.patch(guessId, { status: "correct" });
       await ctx.db.patch(guesser._id, {
         correct: guesser.correct + 1,
         points: guesser.points + gained,
       });
+
+      if (complete) {
+        await ctx.db.patch(room._id, {
+          revealed,
+          pendingGuessId: null,
+          currentTurnId: null,
+          status: "won",
+        });
+        return;
+      }
+
+      // The guesser keeps the mic — keep discovering.
       await ctx.db.patch(room._id, {
-        status: "won",
+        revealed,
         pendingGuessId: null,
-        currentTurnId: null,
+        currentTurnId: guesser._id,
       });
       return;
     }
@@ -452,9 +542,14 @@ export const judgeGuess = mutation({
   },
 });
 
+/** One clue per question, aimed at one specific part. */
 export const createClue = mutation({
-  args: { token: v.string(), text: v.string() },
-  handler: async (ctx, { token, text }) => {
+  args: {
+    token: v.string(),
+    category: categoryValidator,
+    text: v.string(),
+  },
+  handler: async (ctx, { token, category, text }) => {
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
     if (!room) throw new Error("Room not found.");
@@ -466,12 +561,15 @@ export const createClue = mutation({
       throw new Error(`Clue unlocks after ${CLUE_UNLOCK_AT} wrong guesses.`);
     }
     if (room.clue) throw new Error("This question already used its clue.");
+    if (revealedOf(room)[category]) {
+      throw new Error("That part is already on the board.");
+    }
 
     const clue = text.trim().replace(/\s+/g, " ");
     if (!clue) throw new Error("Type a clue first.");
     if (clue.length > 140) throw new Error("Keep the clue under 140 characters.");
 
-    await ctx.db.patch(room._id, { clue });
+    await ctx.db.patch(room._id, { clue, clueCategory: category });
     await ctx.db.patch(player._id, { cluesUsed: player.cluesUsed + 1 });
   },
 });
@@ -502,7 +600,9 @@ export const advanceRound = mutation({
       question: mode === "replay" ? room.question : null,
       lives: MAX_LIVES,
       wrongGuesses: 0,
+      revealed: emptyRevealed(),
       clue: "",
+      clueCategory: null,
       pendingGuessId: null,
       currentTurnId: null,
       round: room.round + 1,

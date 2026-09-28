@@ -16,6 +16,25 @@ export const roleValidator = v.union(
 );
 export type Role = Infer<typeof roleValidator>;
 
+// The four independent parts of a KOLLYWOOD question. Every guess and clue is
+// scoped to one of these, and the 9 chances are shared across all of them.
+export const categoryValidator = v.union(
+  v.literal("hero"),
+  v.literal("heroine"),
+  v.literal("movie"),
+  v.literal("song"),
+);
+export type Category = Infer<typeof categoryValidator>;
+
+/** Which of the four parts have been discovered yet. */
+export const revealedValidator = v.object({
+  hero: v.boolean(),
+  heroine: v.boolean(),
+  movie: v.boolean(),
+  song: v.boolean(),
+});
+export type Revealed = Infer<typeof revealedValidator>;
+
 const schema = defineSchema(
   {
     // default auth tables using convex auth.
@@ -52,7 +71,10 @@ const schema = defineSchema(
       round: v.number(),
       lives: v.number(), // KOLLYWOOD letters remaining (starts at 9)
       wrongGuesses: v.number(), // total wrong guesses this round
+      // Which of the four parts the guessers have cracked so far.
+      revealed: revealedValidator,
       clue: v.string(), // "" = no clue yet, one clue per question
+      clueCategory: v.nullable(categoryValidator), // which part the clue hints at
       question: v.nullable(
         v.object({
           hero: v.string(),
@@ -86,6 +108,7 @@ const schema = defineSchema(
       playerId: v.id("players"),
       playerName: v.string(),
       round: v.number(),
+      category: categoryValidator, // what the player was guessing
       text: v.string(),
       status: v.union(
         v.literal("pending"), // waiting for the creator to judge
