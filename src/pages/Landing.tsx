@@ -38,17 +38,17 @@ const STEPS = [
   },
   {
     n: "02",
-    title: "Set the four clues",
-    body: "Hero, heroine, movie and song. Everyone else only ever gets the first letter of each — and the whole room plays that same puzzle.",
+    title: "Pick the movie and the song",
+    body: "That's the whole job. Hero, heroine and title come straight from the library — everyone else only ever gets the first letter of each part.",
   },
   {
     n: "03",
-    title: "Guess, judge, reveal",
-    body: "Everyone guesses at the same time with their own nine chances. The creator approves each player's call separately.",
+    title: "Guess, validate, score",
+    body: "Everyone guesses at the same time with their own nine chances. The game checks every answer the instant it lands — no waiting, no approving.",
   },
 ];
 
-/** The GUESS → APPROVAL → REVEAL loop that drives a round. */
+/** The GUESS → VALIDATE → REVEAL loop that drives a round. */
 const LOOP = [
   {
     icon: "🎯",
@@ -56,14 +56,14 @@ const LOOP = [
     body: "Four buttons — hero, heroine, movie or song. Attack them in whatever order you like.",
   },
   {
-    icon: "🎬",
-    title: "The creator judges",
-    body: "Nothing is auto-marked. The friend running the round calls your guess right or wrong.",
+    icon: "⚡",
+    title: "Checked instantly",
+    body: "No judge, no approval queue. The answer is compared against the movie on the server the moment you press submit.",
   },
   {
     icon: "✓",
     title: "Reveal or burn",
-    body: "A correct call flips that part to the full answer. A miss burns one KOLLYWOOD letter.",
+    body: "A correct guess flips that part to the full answer and locks it. A miss burns one KOLLYWOOD letter — yours only.",
   },
   {
     icon: "🏆",
@@ -73,7 +73,7 @@ const LOOP = [
   {
     icon: "🔁",
     title: "Pass the clapperboard",
-    body: "When everyone finishes, the next player writes a brand-new question. Everyone creates one, everyone guesses the rest — highest total takes the crown.",
+    body: "When everyone finishes, the room rolls straight on to the next player. Everyone creates one, everyone guesses the rest — highest total takes the crown.",
   },
 ];
 
@@ -333,7 +333,7 @@ export default function Landing() {
         <section className="mx-auto w-full max-w-6xl px-5 pb-20 sm:pb-28">
           <div className="mb-11 text-center">
             <p className="font-type text-[11px] tracking-[0.42em] text-[#898675] uppercase">
-              Guess · approve · reveal
+              Guess · validate · reveal
             </p>
             <h2 className="font-display mt-3 text-4xl tracking-[0.05em] text-[#c0bba1] sm:text-5xl">
               Four parts.{" "}
@@ -432,6 +432,11 @@ export default function Landing() {
               pool — burn all nine and the film gets away while your friends are
               still guessing.
             </p>
+            <p className="mx-auto mt-4 max-w-lg text-xs leading-relaxed text-[#898675]/70">
+              🎞 The game speaks too: a projector click and camera flash when a
+              guess lands, a soft rewind when a letter burns. Volume, music and
+              effects are all yours to dial — in the corner of the screen.
+            </p>
           </motion.div>
         </section>
 
@@ -526,8 +531,8 @@ export default function Landing() {
               OPEN A SCREENING
             </DialogTitle>
             <DialogDescription className="text-[#898675]">
-              Pick your marquee name — you&apos;ll write the first question and
-              judge every guess.
+              Pick your marquee name — you&apos;ll set the first question from
+              the library.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="grid gap-4">

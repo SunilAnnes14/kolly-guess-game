@@ -1,4 +1,5 @@
 import { api } from "@/convex/_generated/api";
+import { playSound } from "@/lib/sounds";
 import { cn, friendlyError } from "@/lib/utils";
 import type { RoomState } from "@/pages/room/types";
 import { motion } from "framer-motion";
@@ -12,9 +13,12 @@ import {
   Trophy,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
+
+/** Seconds of end-of-round credits before the next question starts itself. */
+const AUTO_ADVANCE_SECONDS = 12;
 
 /** The four parts, in board order, with the emoji the board uses. */
 const PARTS = [
@@ -193,6 +197,18 @@ function ProgressMark({
   );
 }
 
+/**
+ * Play a cue once, on mount — the reel-and-chord sting when a round closes.
+ */
+function useCue(name: Parameters<typeof playSound>[0]) {
+  const played = useRef(false);
+  useEffect(() => {
+    if (played.current) return;
+    played.current = true;
+    playSound(name);
+  }, [name]);
+}
+
 function Shell({
   children,
   confetti = false,
@@ -227,6 +243,9 @@ export function RoundComplete({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 🎞 film reel → projector stop → short chord
+  useCue("roundComplete");
+
   const isNextCreator = !!room.me && room.me.id === room.nextCreatorId;
   const creator = room.players.find((p) => p.isCreator);
   const next = room.players.find((p) => p.id === room.nextCreatorId);
@@ -242,7 +261,7 @@ export function RoundComplete({
     (a, b) => b.points - a.points || b.solves - a.solves,
   );
 
-  const advance = async () => {
+  const advance = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
@@ -251,7 +270,29 @@ export function RoundComplete({
       setError(friendlyError(err));
       setBusy(false);
     }
-  };
+  }, [startNextRound, token]);
+
+  // The rotation moves on by itself — nobody has to press anything.
+  const [countdown, setCountdown] = useState(AUTO_ADVANCE_SECONDS);
+  useEffect(() => {
+    const started = Date.now();
+    const tick = window.setInterval(() => {
+      setCountdown(
+        Math.max(
+          0,
+          AUTO_ADVANCE_SECONDS - Math.floor((Date.now() - started) / 1000),
+        ),
+      );
+    }, 250);
+    const go = window.setTimeout(
+      () => void advance(),
+      AUTO_ADVANCE_SECONDS * 1000,
+    );
+    return () => {
+      window.clearInterval(tick);
+      window.clearTimeout(go);
+    };
+  }, [advance]);
 
   return (
     <Shell confetti>
@@ -356,27 +397,28 @@ export function RoundComplete({
             : `Waiting for ${next?.name ?? "the next creator"} to set the question…`}
         </p>
 
-        {isNextCreator ? (
-          <button
-            type="button"
-            onClick={advance}
-            disabled={busy}
-            className="kolly-cta mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground shadow-[0_10px_34px_rgba(116,124,91,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(116,124,91,0.5)] active:translate-y-0 disabled:opacity-60"
-          >
-            {busy ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <>
-                <span className="text-lg">🎬</span> CREATE THE NEXT QUESTION
-              </>
-            )}
-          </button>
-        ) : (
-          <p className="mt-5 flex items-center justify-center gap-2 text-sm text-white/50">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
-            Round {room.round + 1} of {room.roundsTotal} is loading…
-          </p>
-        )}
+        <button
+          type="button"
+          onClick={advance}
+          disabled={busy || countdown === 0}
+          className="kolly-cta mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground shadow-[0_10px_34px_rgba(116,124,91,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(116,124,91,0.5)] active:translate-y-0 disabled:opacity-60"
+        >
+          {busy ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <>
+              <span className="text-lg">🎬</span>
+              {isNextCreator ? "CREATE THE NEXT QUESTION" : "START THE NEXT ROUND"}
+            </>
+          )}
+        </button>
+
+        <p className="mt-3 flex items-center justify-center gap-2 text-xs text-white/45">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+          {countdown > 0
+            ? `Starting automatically in ${countdown}s…`
+            : `Round ${room.round + 1} of ${room.roundsTotal} is loading…`}
+        </p>
 
         {error && <p className="mt-3 text-sm text-[#c08a6e]">{error}</p>}
       </motion.div>
@@ -398,6 +440,9 @@ export function Champion({
   const restartGame = useMutation(api.game.restartGame);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 🎬 the end title of an old movie
+  useCue("finalWinner");
 
   const standings = useMemo(
     () =>

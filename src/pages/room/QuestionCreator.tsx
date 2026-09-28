@@ -1,7 +1,7 @@
 import { ClueCross } from "@/components/kollywood/ClueCross";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
-import { pickSong, searchMovies, type MovieEntry } from "@/lib/movieDataset";
+import { searchMovies, type MovieRecord } from "@/lib/movieDataset";
 import { friendlyError } from "@/lib/utils";
 import type { RoomState } from "@/pages/room/types";
 import { AnimatePresence, motion } from "framer-motion";
@@ -11,6 +11,7 @@ import {
   Heart,
   Loader2,
   Music2,
+  PencilLine,
   Search,
   Sparkles,
   User,
@@ -25,43 +26,30 @@ function firstLetter(value: string): string {
   return (letter ?? trimmed.charAt(0)).toUpperCase();
 }
 
-const FIELDS = [
-  {
-    key: "hero",
-    label: "Hero",
-    hint: "Actor's name",
-    placeholder: "Vijay",
-    Icon: User,
-  },
-  {
-    key: "heroine",
-    label: "Heroine",
-    hint: "Actress's name",
-    placeholder: "Trisha",
-    Icon: Heart,
-  },
+const TYPED_FIELDS = [
+  { key: "hero", label: "Hero", placeholder: "Vijay", Icon: User },
+  { key: "heroine", label: "Heroine", placeholder: "Trisha", Icon: Heart },
   {
     key: "movie",
     label: "Movie",
-    hint: "Part of the answer",
     placeholder: "Ghilli",
     Icon: Clapperboard,
   },
   {
     key: "song",
     label: "Song",
-    hint: "A song from the movie",
     placeholder: "Appadi Podu",
     Icon: Music2,
   },
 ] as const;
 
 /**
- * This round's question creator: search the Tamil movie library or type your
- * own four parts, watch the "+" preview, then pull the CREATE QUESTION lever.
+ * This round's question creator.
  *
- * The whole room plays this exact question at the same time, each with their
- * own nine chances — then the clapperboard passes to the next player.
+ * The only real job is picking a movie and one of its songs — the server
+ * derives the hero, the heroine, the title and the accepted aliases, then
+ * validates every guess on its own. There is nothing to approve, reject or
+ * score afterwards.
  */
 export function QuestionCreator({
   room,
@@ -71,14 +59,16 @@ export function QuestionCreator({
   token: string;
 }) {
   const submitQuestion = useMutation(api.game.submitQuestion);
-  const [values, setValues] = useState({
+  const [query, setQuery] = useState("");
+  const [picked, setPicked] = useState<MovieRecord | null>(null);
+  const [song, setSong] = useState("");
+  const [manual, setManual] = useState(false);
+  const [typed, setTyped] = useState({
     hero: "",
     heroine: "",
     movie: "",
     song: "",
   });
-  const [query, setQuery] = useState("");
-  const [picked, setPicked] = useState<MovieEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -90,39 +80,49 @@ export function QuestionCreator({
   const guessers = room.isShowdown
     ? room.tiebreakIds.filter((id) => id !== room.me?.id).length
     : Math.max(0, room.players.length - 1);
-  const filled =
-    values.hero.trim() &&
-    values.heroine.trim() &&
-    values.movie.trim() &&
-    values.song.trim();
 
-  const chooseMovie = (entry: MovieEntry) => {
-    setPicked(entry);
-    setValues({
-      hero: entry.hero,
-      heroine: entry.heroine,
-      movie: entry.movie,
-      song: pickSong(entry),
-    });
+  const ready = manual
+    ? Boolean(
+        typed.hero.trim() &&
+          typed.heroine.trim() &&
+          typed.movie.trim() &&
+          typed.song.trim(),
+      )
+    : Boolean(picked && song);
+
+  const chooseMovie = (record: MovieRecord) => {
+    setPicked(record);
+    setSong(record.songs[0] ?? "");
     setQuery("");
+    setManual(false);
     setError(null);
   };
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!filled) {
-      setError("Fill in all four parts to create the question.");
-      return;
-    }
+    if (!ready) return;
     setBusy(true);
     setError(null);
     try {
-      await submitQuestion({ token, ...values });
+      await submitQuestion(
+        manual
+          ? { token, ...typed }
+          : { token, movieId: picked?.id, song },
+      );
     } catch (err) {
       setError(friendlyError(err));
       setBusy(false);
     }
   };
+
+  const preview = manual
+    ? typed
+    : {
+        hero: picked?.hero ?? "",
+        heroine: picked?.heroine ?? "",
+        movie: picked?.movie ?? "",
+        song,
+      };
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 sm:py-9">
@@ -142,16 +142,16 @@ export function QuestionCreator({
           {room.isShowdown ? "setting the decider" : "the question creator"}
         </p>
         <h1 className="font-display mt-3 text-4xl tracking-[0.06em] text-white sm:text-5xl">
-          Set the <span className="gold-text">four clues</span>
+          Pick the <span className="gold-text">four clues</span>
         </h1>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-white/60">
           {room.isShowdown
             ? `One final question for the crown. ${guessers} ${
                 guessers === 1 ? "player is" : "players are"
-              } level at the top and will race this one — you judge every guess.`
-            : `Hero, heroine, movie and song. ${guessers} ${
+              } level at the top and will race this one.`
+            : `Choose a movie and one of its songs. ${guessers} ${
                 guessers === 1 ? "player" : "players"
-              } get this exact question with their own nine chances — and you judge every guess.`}
+              } get this exact question with their own nine chances — the game validates every answer on its own from here.`}
         </p>
       </motion.div>
 
@@ -164,7 +164,6 @@ export function QuestionCreator({
           transition={{ duration: 0.5, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
           className="glass rounded-3xl p-5 sm:p-6"
         >
-          {/* ---------- movie library search ---------- */}
           <div className="relative">
             <label
               htmlFor="movie-search"
@@ -191,10 +190,10 @@ export function QuestionCreator({
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
-                  className="absolute inset-x-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-white/12 bg-[#1b1c17]/95 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                  className="absolute inset-x-0 top-full z-20 mt-2 max-h-72 overflow-y-auto rounded-2xl border border-white/12 bg-[#1b1c17]/95 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl"
                 >
                   {results.map((entry) => (
-                    <li key={`${entry.movie}-${entry.year}`}>
+                    <li key={entry.id}>
                       <button
                         type="button"
                         onClick={() => chooseMovie(entry)}
@@ -218,75 +217,88 @@ export function QuestionCreator({
               )}
             </AnimatePresence>
 
-            {picked && (
+            {picked && !manual && (
               <div className="mt-3 rounded-2xl border border-primary/25 bg-primary/[0.06] px-3.5 py-3">
                 <p className="text-[11px] tracking-[0.18em] text-primary/85 uppercase">
                   {picked.movie} · {picked.year}
                 </p>
-                {picked.songs.length > 1 && (
-                  <>
-                    <p className="mt-2 text-[10px] tracking-[0.2em] text-white/45 uppercase">
-                      Which song?
-                    </p>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {picked.songs.map((song) => (
-                        <button
-                          key={song}
-                          type="button"
-                          onClick={() =>
-                            setValues((prev) => ({ ...prev, song }))
-                          }
-                          className={
-                            "rounded-full border px-3 py-1 text-xs transition-all " +
-                            (values.song === song
-                              ? "border-primary/70 bg-primary/20 text-primary"
-                              : "border-white/15 text-white/65 hover:border-primary/45 hover:text-white")
-                          }
-                        >
-                          {song}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
+                <p className="mt-1 text-[11px] text-white/45">
+                  {picked.hero} · {picked.heroine}
+                </p>
+                <p className="mt-2 text-[10px] tracking-[0.2em] text-white/45 uppercase">
+                  Which song?
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {picked.songs.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setSong(option)}
+                      className={
+                        "rounded-full border px-3 py-1 text-xs transition-all " +
+                        (song === option
+                          ? "border-primary/70 bg-primary/20 text-primary"
+                          : "border-white/15 text-white/65 hover:border-primary/45 hover:text-white")
+                      }
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
-          <div className="gold-rule my-5" />
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            {FIELDS.map((field) => (
-              <label key={field.key} className="grid gap-1.5">
-                <span className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.2em] text-white/60 uppercase">
-                  <field.Icon className="h-3.5 w-3.5 text-primary/80" />
-                  {field.label}
-                  <span className="font-normal tracking-normal text-white/35 lowercase">
-                    — {field.hint}
-                  </span>
-                </span>
-                <Input
-                  value={values[field.key]}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setValues((prev) => ({ ...prev, [field.key]: next }));
-                  }}
-                  placeholder={field.placeholder}
-                  maxLength={60}
-                  className="h-12 rounded-xl border-white/15 bg-white/5 text-base placeholder:text-white/25 focus-visible:border-primary/60 focus-visible:ring-primary/30"
-                />
-              </label>
-            ))}
-          </div>
+          {/* ---------- hand-typed fallback ---------- */}
+          {manual ? (
+            <>
+              <div className="gold-rule my-5" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                {TYPED_FIELDS.map((field) => (
+                  <label key={field.key} className="grid gap-1.5">
+                    <span className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.2em] text-white/60 uppercase">
+                      <field.Icon className="h-3.5 w-3.5 text-primary/80" />
+                      {field.label}
+                    </span>
+                    <Input
+                      value={typed[field.key]}
+                      onChange={(e) =>
+                        setTyped((prev) => ({
+                          ...prev,
+                          [field.key]: e.target.value,
+                        }))
+                      }
+                      placeholder={field.placeholder}
+                      maxLength={60}
+                      className="h-12 rounded-xl border-white/15 bg-white/5 text-base placeholder:text-white/25 focus-visible:border-primary/60 focus-visible:ring-primary/30"
+                    />
+                  </label>
+                ))}
+              </div>
+              <p className="mt-3 text-center text-[11px] text-white/40">
+                Not in the library? Only your exact spelling will be accepted,
+                along with ordinary spacing and punctuation variants.
+              </p>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setManual(true)}
+              className="mt-5 flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.18em] text-white/45 uppercase transition-colors hover:text-primary"
+            >
+              <PencilLine className="h-3.5 w-3.5" />
+              My movie isn&apos;t in the library
+            </button>
+          )}
 
           {error && <p className="mt-4 text-sm text-[#c08a6e]">{error}</p>}
 
           <button
             type="submit"
-            disabled={busy || !filled}
+            disabled={busy || !ready}
             className={
               "kolly-cta mt-5 flex h-14 w-full items-center justify-center gap-2.5 rounded-2xl text-base font-semibold tracking-wide transition-all " +
-              (filled
+              (ready
                 ? "bg-primary text-primary-foreground shadow-[0_10px_34px_rgba(116,124,91,0.3)] hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(116,124,91,0.45)] active:translate-y-0"
                 : "cursor-not-allowed border border-white/10 bg-white/[0.04] text-white/35")
             }
@@ -301,7 +313,8 @@ export function QuestionCreator({
           </button>
 
           <p className="mt-3 text-center text-xs text-white/40">
-            You sit this one out — the others are guessing.
+            Validation is automatic from here — you sit this one out and watch
+            the boards fill in.
           </p>
         </motion.form>
 
@@ -318,10 +331,10 @@ export function QuestionCreator({
           <div className="mt-5 w-full">
             <ClueCross
               initials={{
-                hero: firstLetter(values.hero),
-                heroine: firstLetter(values.heroine),
-                movie: firstLetter(values.movie),
-                song: firstLetter(values.song),
+                hero: firstLetter(preview.hero),
+                heroine: firstLetter(preview.heroine),
+                movie: firstLetter(preview.movie),
+                song: firstLetter(preview.song),
               }}
             />
           </div>

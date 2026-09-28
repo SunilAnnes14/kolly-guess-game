@@ -28,7 +28,7 @@ export function PlusBoard({
   revealed: Record<Category, boolean>;
   values: Record<Category, string | null>;
   selected?: Category | null;
-  /** Omit to make the board read-only (e.g. for the judge or a preview). */
+  /** Omit to make the board read-only (e.g. for a preview). */
   onSelect?: (category: Category) => void;
   impact?: { category: Category; id: number } | null;
 }) {

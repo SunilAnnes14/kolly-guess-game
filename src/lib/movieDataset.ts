@@ -149,11 +149,151 @@ export const MOVIE_DATASET: MovieEntry[] = [
   { movie: "Pariyerum Perumal", year: 2018, hero: "Kathir", heroine: "Anandhi", songs: ["Karuppi"] },
 ];
 
+/**
+ * A library row plus the stable id a question is pinned to. Derived once at
+ * load time, so the hand-written entries above stay untouched.
+ */
+export type MovieRecord = MovieEntry & { id: string };
+
+/** The four parts of a question, mirrored from the server's category list. */
+export type AnswerCategory = "hero" | "heroine" | "movie" | "song";
+
+function slugify(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** Every library entry with its stable `id`, in dataset order. */
+export const MOVIE_LIBRARY: MovieRecord[] = MOVIE_DATASET.map((entry) => ({
+  ...entry,
+  id: `${slugify(entry.movie) || slugify(String(entry.year))}-${entry.year}`,
+}));
+
+/** The library row a question was built from, if it is still in the book. */
+export function findMovieById(id: string): MovieRecord | null {
+  return MOVIE_LIBRARY.find((entry) => entry.id === id) ?? null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Approved aliases                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Extra spellings people genuinely use for an actor or actress. Only forms
+ * that are real alternate names for the SAME person are listed — nothing that
+ * could be mistaken for a different artist.
+ */
+const PERSON_ALIASES: Record<string, string[]> = {
+  Vijay: ["Thalapathy Vijay", "Thalapathy"],
+  Trisha: ["Trisha Krishnan"],
+  "Trisha Krishnan": ["Trisha"],
+  "Jyothika": ["Jothika"],
+  Samantha: ["Samantha Akkineni", "Samantha Ruth Prabhu"],
+  "Nayanthara": ["Nayantara"],
+  "R. Madhavan": ["Madhavan", "R Madhavan", "R.Madhavan"],
+  "Vijay Sethupathi": ["Sethupathi"],
+  Rajinikanth: ["Rajini", "Superstar Rajinikanth", "Rajinikanth Sivaji"],
+  "Kamal Haasan": ["Kamal", "Kamal Haasan", "Kamalhassan"],
+  Suriya: ["Surya"],
+};
+
+/** Alternate titles and shortened forms of a film. */
+const MOVIE_ALIASES: Record<string, string[]> = {
+  "Ponniyin Selvan: Part 1": ["Ponniyin Selvan", "PS1", "Ponniyin Selvan 1"],
+  "Ponniyin Selvan: Part 2": ["Ponniyin Selvan", "PS2", "Ponniyin Selvan 2"],
+  "7aum Arivu": ["7 Aum Arivu", "Aum Arivu", "7aum"],
+  "Vinnaithaandi Varuvaayaa": ["Vinnaithaandi Varuvayaa", "VVV"],
+  "Achcham Yenbadhu Madamaiyada": [
+    "Acham Yenbadhu Madamaiyada",
+    "Aynmadamaiyada",
+  ],
+  "OK Kanmani": ["O Kadhal Kanmani", "Ok Kanmani"],
+  "Kandukondain Kandukondain": ["Kandukondain"],
+  "The Greatest of All Time": ["GOAT", "The Goat"],
+  "24": ["24 Kisses"],
+  "I": ["I Movie"],
+  "2.0": ["2"],
+};
+
+/**
+ * Song spellings that differ from the printed title. Keys are compared after
+ * normalisation, so case and spacing do not matter here.
+ */
+const SONG_ALIASES: Record<string, string[]> = {
+  "Kabadi Kabadi": ["Kabaddi Kabaddi", "Kabadi Kabbadi"],
+  "Mun Andhi": ["Munandhi", "Mun Andhiy"],
+  "Yakkai Thiri": ["Yakka Thir"],
+  "Don'u Don'u": ["Donu Donu", "Don U Don U"],
+  "Vaanganna Vanakkanganna": ["Vaanganna Vanakkanganna"],
+};
+
+function aliasesForValue(
+  value: string,
+  table: Record<string, string[]>,
+): string[] {
+  const direct = table[value];
+  if (direct) return direct;
+  // "Ok Kanmani" should hit the "OK Kanmani" row just as easily.
+  const key = Object.keys(table).find(
+    (k) => k.toLowerCase() === value.toLowerCase(),
+  );
+  return key ? table[key] : [];
+}
+
+function unique(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const key = value.toLowerCase();
+    if (!value.trim() || seen.has(key)) continue;
+    seen.add(key);
+    out.push(value.trim());
+  }
+  return out;
+}
+
+/**
+ * The approved answer set for one question built from a library row.
+ *
+ * The stored answer is always accepted; these are the ONLY other spellings
+ * that will pass validation.
+ */
+export function answerAliasesFor(
+  entry: MovieEntry,
+  song: string,
+): Record<AnswerCategory, string[]> {
+  return {
+    hero: unique([...aliasesForValue(entry.hero, PERSON_ALIASES), entry.hero]),
+    heroine: unique([
+      ...aliasesForValue(entry.heroine, PERSON_ALIASES),
+      entry.heroine,
+    ]),
+    movie: unique([...aliasesForValue(entry.movie, MOVIE_ALIASES), entry.movie]),
+    song: unique([...aliasesForValue(song, SONG_ALIASES), song]),
+  };
+}
+
+/** Alias set for a question someone typed in by hand rather than picking. */
+export function typedAliases(
+  values: Record<AnswerCategory, string>,
+): Record<AnswerCategory, string[]> {
+  return {
+    hero: unique([values.hero]),
+    heroine: unique([values.heroine]),
+    movie: unique([values.movie]),
+    song: unique([values.song]),
+  };
+}
+
 /** Case-insensitive search over movie, hero and heroine. */
-export function searchMovies(query: string, limit = 8): MovieEntry[] {
+export function searchMovies(query: string, limit = 8): MovieRecord[] {
   const q = query.trim().toLowerCase();
-  if (!q) return MOVIE_DATASET.slice(0, limit);
-  return MOVIE_DATASET.filter(
+  if (!q) return MOVIE_LIBRARY.slice(0, limit);
+  return MOVIE_LIBRARY.filter(
     (entry) =>
       entry.movie.toLowerCase().includes(q) ||
       entry.hero.toLowerCase().includes(q) ||

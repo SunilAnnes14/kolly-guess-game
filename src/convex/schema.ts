@@ -82,8 +82,17 @@ const schema = defineSchema(
       creatorId: v.nullable(v.id("players")),
       round: v.number(), // 1-based
       roundsTotal: v.number(), // 0 until the game starts
+      /**
+       * The round's question. Everything the server needs to validate a guess
+       * lives here: the four answers, the library movie they came from and the
+       * approved aliases for each part. Never sent to a guesser until they
+       * have earned it.
+       */
       question: v.nullable(
         v.object({
+          questionId: v.string(),
+          movieId: v.optional(v.string()),
+          creatorId: v.id("players"),
           hero: v.string(),
           heroine: v.string(),
           movie: v.string(),
@@ -92,6 +101,13 @@ const schema = defineSchema(
           heroineInitial: v.string(),
           movieInitial: v.string(),
           songInitial: v.string(),
+          /** The ONLY spellings that will pass validation, per part. */
+          aliases: v.object({
+            hero: v.array(v.string()),
+            heroine: v.array(v.string()),
+            movie: v.array(v.string()),
+            song: v.array(v.string()),
+          }),
         }),
       ),
       /**
@@ -148,11 +164,8 @@ const schema = defineSchema(
       playerName: v.string(),
       category: categoryValidator, // what the player was guessing
       text: v.string(),
-      status: v.union(
-        v.literal("pending"), // waiting for the creator to judge
-        v.literal("correct"),
-        v.literal("wrong"),
-      ),
+      /** Decided the instant the guess lands — there is no manual judging. */
+      status: v.union(v.literal("correct"), v.literal("wrong")),
       createdAt: v.number(),
     })
       .index("by_room", ["roomId"])

@@ -310,13 +310,13 @@ function CreatorWriting({ room }: { room: RoomState }) {
         <p className="text-4xl">🎬</p>
         <p className="font-display mt-4 text-2xl tracking-[0.14em] text-white">
           {room.isShowdown
-            ? `${creator?.name?.toUpperCase() ?? "THE JUDGE"} IS SETTING THE DECIDER…`
-            : `${creator?.name?.toUpperCase() ?? "THE CREATOR"} IS WRITING…`}
+            ? `${creator?.name?.toUpperCase() ?? "THE CREATOR"} IS SETTING THE DECIDER…`
+            : `${creator?.name?.toUpperCase() ?? "THE CREATOR"} IS PICKING THE MOVIE…`}
         </p>
         <p className="mt-3 text-sm leading-relaxed text-white/60">
           {room.isShowdown
             ? "The players level on points are about to race one final question for the crown. Sit back — this one decides everything."
-            : `Round ${room.round} of ${room.roundsTotal}. They're picking four clues for everyone to crack — your own nine chances start the moment the question lands.`}
+            : `Round ${room.round} of ${room.roundsTotal}. They're choosing a movie and a song for everyone to crack — your own nine chances start the moment the question lands.`}
         </p>
         <span className="mt-5 flex items-center justify-center gap-2">
           <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />

@@ -2,8 +2,8 @@
  * The four independent parts of a KOLLYWOOD question.
  *
  * Kept in sync with the server's `categoryValidator` — one order, one set of
- * labels, shared by the board, the guess desk, the judge's desk and the clue
- * form so the "+" always reads the same way.
+ * labels, shared by the board, the guess desk and the clue form so the "+"
+ * always reads the same way.
  */
 export type Category = "hero" | "heroine" | "movie" | "song";
 
