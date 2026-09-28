@@ -74,6 +74,8 @@ const schema = defineSchema(
         v.literal("creating"), // this round's creator is writing the question
         v.literal("playing"), // the question is live, everyone guesses
         v.literal("roundComplete"), // everyone finished this question
+        v.literal("tiebreak"), // top scores level — the decider is being written
+        v.literal("showdown"), // only the tied players race the final question
         v.literal("finished"), // all rounds played — final leaderboard
       ),
       // Who wrote the CURRENT round's question. Null in the lobby.
@@ -92,6 +94,11 @@ const schema = defineSchema(
           songInitial: v.string(),
         }),
       ),
+      /**
+       * Who is level on points at the top when a game ends — the only players
+       * who race the tie-break showdown. Empty outside a tie-break.
+       */
+      tiebreakIds: v.optional(v.array(v.id("players"))),
       createdAt: v.number(),
     }).index("by_code", ["code"]),
 
@@ -126,6 +133,7 @@ const schema = defineSchema(
       clueCategory: v.nullable(categoryValidator),
       status: progressValidator,
       score: v.number(), // this round's score
+      placement: v.optional(v.number()), // 1-based finish order, once solved
       completedAt: v.nullable(v.number()),
       createdAt: v.number(),
     })

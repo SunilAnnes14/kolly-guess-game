@@ -87,7 +87,9 @@ export function QuestionCreator({
     [query],
   );
 
-  const guessers = Math.max(0, room.players.length - 1);
+  const guessers = room.isShowdown
+    ? room.tiebreakIds.filter((id) => id !== room.me?.id).length
+    : Math.max(0, room.players.length - 1);
   const filled =
     values.hero.trim() &&
     values.heroine.trim() &&
@@ -132,17 +134,24 @@ export function QuestionCreator({
       >
         <p className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-semibold tracking-[0.4em] text-primary/85 uppercase">
           <span className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 tracking-[0.18em]">
-            Round {room.round} / {room.roundsTotal}
+            {room.isShowdown
+              ? "⚡ Final showdown"
+              : `Round ${room.round} / ${room.roundsTotal}`}
           </span>
-          🎬 You&apos;re the question creator
+          🎬 You&apos;re{" "}
+          {room.isShowdown ? "setting the decider" : "the question creator"}
         </p>
         <h1 className="font-display mt-3 text-4xl tracking-[0.06em] text-white sm:text-5xl">
           Set the <span className="gold-text">four clues</span>
         </h1>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-white/60">
-          Hero, heroine, movie and song. {guessers}{" "}
-          {guessers === 1 ? "player" : "players"} get this exact question with
-          their own nine chances — and you judge every guess.
+          {room.isShowdown
+            ? `One final question for the crown. ${guessers} ${
+                guessers === 1 ? "player is" : "players are"
+              } level at the top and will race this one — you judge every guess.`
+            : `Hero, heroine, movie and song. ${guessers} ${
+                guessers === 1 ? "player" : "players"
+              } get this exact question with their own nine chances — and you judge every guess.`}
         </p>
       </motion.div>
 

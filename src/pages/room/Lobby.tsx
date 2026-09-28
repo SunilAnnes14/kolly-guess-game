@@ -11,7 +11,6 @@ import {
   Crown,
   Loader2,
   Share2,
-  Shuffle,
   Star,
 } from "lucide-react";
 import { useState } from "react";
@@ -22,15 +21,7 @@ import { useState } from "react";
  * Once everyone is in, the host opens the game: every player writes exactly
  * one question and guesses everybody else's, so the 🎬 badge walks the room.
  */
-export function Lobby({
-  room,
-  token,
-  onSwitchPlayer,
-}: {
-  room: RoomState;
-  token: string;
-  onSwitchPlayer: () => void;
-}) {
+export function Lobby({ room, token }: { room: RoomState; token: string }) {
   const startGame = useMutation(api.game.startGame);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -124,17 +115,9 @@ export function Lobby({
           <p className="text-[11px] font-semibold tracking-[0.3em] text-white/55 uppercase">
             👥 In the theatre · {room.players.length}
           </p>
-          <p className="flex items-center gap-2 text-xs text-white/55">
+          <p className="text-xs text-white/55">
             Playing as{" "}
             <span className="font-semibold text-white/90">{me?.name}</span>
-            <button
-              type="button"
-              onClick={onSwitchPlayer}
-              title="Switch player"
-              className="flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-[10px] tracking-wider text-white/50 uppercase transition-colors hover:border-primary/50 hover:text-primary"
-            >
-              <Shuffle className="h-3 w-3" /> switch
-            </button>
           </p>
         </div>
 

@@ -65,7 +65,14 @@ export function PlayersPanel({ room }: { room: RoomState }) {
       </ul>
 
       <div className="mt-3 border-t border-white/10 pt-3 text-center">
-        {room.roundsTotal > 0 ? (
+        {room.isShowdown ? (
+          <p className="text-center text-xs tracking-wide text-white/60">
+            ⚡ Final showdown · decider by{" "}
+            <span className="font-semibold text-white/85">
+              {creator?.name ?? "—"}
+            </span>
+          </p>
+        ) : room.roundsTotal > 0 ? (
           <p className="text-xs tracking-wide text-white/60">
             Round {room.round} of {room.roundsTotal} · 🎬{" "}
             <span className="font-semibold text-white/85">

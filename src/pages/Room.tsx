@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/convex/_generated/api";
 import {
-  clearIdentity,
   loadIdentity,
   saveIdentity,
   type RoomIdentity,
@@ -44,11 +43,6 @@ export default function Room() {
 
   const token = identity?.token ?? "";
 
-  const switchPlayer = () => {
-    clearIdentity(code);
-    setIdentity(null);
-  };
-
   if (!room.me) {
     return (
       <div className="relative flex min-h-screen flex-col">
@@ -69,14 +63,18 @@ export default function Room() {
   let view: ReactNode;
   switch (room.status) {
     case "lobby":
-      view = <Lobby room={room} token={token} onSwitchPlayer={switchPlayer} />;
+      view = <Lobby room={room} token={token} />;
       break;
     case "creating":
+    case "tiebreak":
       view = room.me.isCreator ? (
         <QuestionCreator room={room} token={token} />
       ) : (
         <CreatorWriting room={room} />
       );
+      break;
+    case "showdown":
+      view = <GameScreen room={room} token={token} />;
       break;
     case "roundComplete":
       view = <RoundComplete room={room} token={token} />;
@@ -285,12 +283,14 @@ function CreatorWriting({ room }: { room: RoomState }) {
       >
         <p className="text-4xl">🎬</p>
         <p className="font-display mt-4 text-2xl tracking-[0.14em] text-white">
-          {creator?.name?.toUpperCase() ?? "THE CREATOR"} IS WRITING…
+          {room.isShowdown
+            ? `${creator?.name?.toUpperCase() ?? "THE JUDGE"} IS SETTING THE DECIDER…`
+            : `${creator?.name?.toUpperCase() ?? "THE CREATOR"} IS WRITING…`}
         </p>
         <p className="mt-3 text-sm leading-relaxed text-white/60">
-          Round {room.round} of {room.roundsTotal}. They&apos;re picking four
-          clues for everyone to crack — your own nine chances start the moment
-          the question lands.
+          {room.isShowdown
+            ? "The players level on points are about to race one final question for the crown. Sit back — this one decides everything."
+            : `Round ${room.round} of ${room.roundsTotal}. They're picking four clues for everyone to crack — your own nine chances start the moment the question lands.`}
         </p>
         <span className="mt-5 flex items-center justify-center gap-2">
           <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />

@@ -24,6 +24,27 @@ const PARTS = [
   { key: "song", icon: "🎵", label: "Song" },
 ] as const;
 
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+/** 🥇 / 🥈 / 🥉 for the podium, a chequered flag otherwise. */
+function medalFor(placement: number | null): string {
+  return placement && placement <= 3 ? MEDALS[placement - 1] : "🏁";
+}
+
+/** "1st" / "2nd" … / "Failed" for a finish order. */
+function placementLabel(placement: number | null): string {
+  if (!placement) return "Failed";
+  const suffix =
+    placement === 1
+      ? "st"
+      : placement === 2
+        ? "nd"
+        : placement === 3
+          ? "rd"
+          : "th";
+  return `${placement}${suffix}`;
+}
+
 /* ------------------------------------------------------------------ */
 /* Shared bits                                                         */
 /* ------------------------------------------------------------------ */
@@ -209,7 +230,13 @@ export function RoundComplete({
   const creator = room.players.find((p) => p.isCreator);
   const next = room.players.find((p) => p.id === room.nextCreatorId);
 
-  const recap = [...room.entries].sort((a, b) => b.score - a.score);
+  // Podium order first, then whoever else took points, then the failures.
+  const recap = [...room.entries].sort((a, b) => {
+    const pa = a.placement ?? 99;
+    const pb = b.placement ?? 99;
+    if (pa !== pb) return pa - pb;
+    return b.score - a.score;
+  });
   const standings = [...room.players].sort(
     (a, b) => b.points - a.points || b.solves - a.solves,
   );
@@ -265,6 +292,14 @@ export function RoundComplete({
                   : "border-white/[0.08] bg-white/[0.02]",
               )}
             >
+              {entry.placement ? (
+                <span
+                  className="shrink-0 text-base leading-none"
+                  title={placementLabel(entry.placement)}
+                >
+                  {medalFor(entry.placement)}
+                </span>
+              ) : null}
               <PlayerAvatar name={entry.playerName} />
               <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/90">
                 {entry.playerName}
@@ -371,8 +406,13 @@ export function Champion({
       ),
     [room.players],
   );
-  const champion = standings[0];
-  const iWon = !!room.me && room.me.id === champion?.id;
+  const topPoints = standings[0]?.points ?? 0;
+  const champions = standings.filter((p) => p.points === topPoints);
+  const champion = champions[0];
+  const coChampions = champions.length > 1;
+  const isChampion = (player: RoomState["players"][number]) =>
+    champions.some((c) => c.id === player.id);
+  const iWon = !!room.me && champions.some((c) => c.id === room.me?.id);
 
   const playAgain = async () => {
     setBusy(true);
@@ -415,13 +455,17 @@ export function Champion({
           <p className="text-[11px] font-semibold tracking-[0.4em] text-primary/80 uppercase">
             🎬 Kollywood champion
           </p>
-          <p className="font-display gold-text text-glow-gold mt-2 text-6xl leading-none tracking-[0.1em] sm:text-7xl">
-            {champion?.name?.toUpperCase() ?? "—"}
+          <p className="font-display gold-text text-glow-gold mt-2 text-5xl leading-none tracking-[0.1em] sm:text-7xl">
+            {coChampions
+              ? champions.map((c) => c.name.toUpperCase()).join(" · ")
+              : (champion?.name?.toUpperCase() ?? "—")}
           </p>
           <p className="mt-3 text-sm text-white/65">
-            {iWon
-              ? "You took the trophy! 🎉"
-              : `${champion?.name ?? "They"} took the trophy.`}
+            {coChampions
+              ? `${champions.length} players finished level — you share the crown! 👑`
+              : iWon
+                ? "You took the trophy! 🎉"
+                : `${champion?.name ?? "They"} took the trophy.`}
           </p>
         </motion.div>
 
@@ -437,7 +481,7 @@ export function Champion({
               transition={{ delay: 0.6 + index * 0.08, duration: 0.45, ease: EASE }}
               className={cn(
                 "flex items-center gap-3 rounded-2xl border px-3.5 py-3",
-                index === 0
+                isChampion(player)
                   ? "border-primary/50 bg-primary/[0.1]"
                   : "border-white/[0.08] bg-white/[0.02]",
               )}
@@ -445,7 +489,7 @@ export function Champion({
               <span
                 className={cn(
                   "font-display w-6 text-center text-2xl leading-none",
-                  index === 0 ? "text-primary" : "text-white/45",
+                  isChampion(player) ? "text-primary" : "text-white/45",
                 )}
               >
                 {index + 1}
@@ -465,7 +509,7 @@ export function Champion({
                   {player.attempts} guesses
                 </span>
               </span>
-              {index === 0 && (
+              {isChampion(player) && (
                 <Trophy className="h-4 w-4 shrink-0 text-primary" />
               )}
               <span className="font-display w-14 text-right text-2xl leading-none gold-text">

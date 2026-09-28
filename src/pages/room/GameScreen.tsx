@@ -36,6 +36,32 @@ type PendingGuessId = NonNullable<
   RoomState["entries"][number]["pending"]
 >["id"];
 
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+/** How many of the four parts someone already has on their board. */
+function discoveredCount(entry: RoomState["entries"][number]): number {
+  return CATEGORY_ORDER.filter((c) => entry.revealed[c]).length;
+}
+
+/** 🥇 / 🥈 / 🥉 for the podium; nothing deeper than third. */
+function medalFor(placement: number | null): string | null {
+  return placement && placement <= 3 ? MEDALS[placement - 1] : null;
+}
+
+/** "1st place" / "2nd place" … for a finish order. */
+function placementLabel(placement: number | null): string {
+  if (!placement) return "";
+  const suffix =
+    placement === 1
+      ? "st"
+      : placement === 2
+        ? "nd"
+        : placement === 3
+          ? "rd"
+          : "th";
+  return `${placement}${suffix} place`;
+}
+
 /**
  * Round-in-progress screen.
  *
@@ -81,9 +107,15 @@ function RoundBanner({
 }) {
   return (
     <div className="flex flex-wrap items-center justify-center gap-2">
-      <span className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[9px] font-semibold tracking-[0.18em] text-primary uppercase">
-        Round {room.round} / {room.roundsTotal}
-      </span>
+      {room.isShowdown ? (
+        <span className="rounded-full border border-[#ff7a55]/45 bg-[#ff7a55]/10 px-2.5 py-1 text-[9px] font-semibold tracking-[0.18em] text-[#ff7a55] uppercase">
+          ⚡ Final showdown
+        </span>
+      ) : (
+        <span className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[9px] font-semibold tracking-[0.18em] text-primary uppercase">
+          Round {room.round} / {room.roundsTotal}
+        </span>
+      )}
       <span className="text-[10px] font-semibold tracking-[0.3em] text-white/45 uppercase sm:text-[11px]">
         {room.creatorName ? `${room.creatorName}'s question` : "The question"}
       </span>
@@ -146,8 +178,16 @@ function StatusPill({
 }
 
 function AwaitingOthers({ room }: { room: RoomState }) {
-  const playing = room.entries.filter((e) => e.status === "playing");
-  const done = room.entries.length - playing.length;
+  const all = room.entries;
+  const done = all.filter((e) => e.status !== "playing").length;
+  // Podium finishers first, then whoever is furthest along the board.
+  const ranked = [...all].sort((a, b) => {
+    const pa = a.placement ?? 99;
+    const pb = b.placement ?? 99;
+    if (pa !== pb) return pa - pb;
+    return discoveredCount(b) - discoveredCount(a);
+  });
+  const firstSolver = ranked.find((e) => e.status === "solved");
 
   return (
     <motion.div
@@ -155,41 +195,71 @@ function AwaitingOthers({ room }: { room: RoomState }) {
       animate={{ opacity: 1, y: 0 }}
       className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5"
     >
+      {firstSolver && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: "spring", stiffness: 220, damping: 18 }}
+          className="mb-4 rounded-2xl border border-primary/50 bg-primary/[0.1] px-4 py-3.5 text-center"
+        >
+          <p className="font-display gold-text text-glow-gold text-2xl tracking-[0.08em]">
+            🏆 {firstSolver.playerName.toUpperCase()} SOLVED IT FIRST!
+          </p>
+          <p className="mt-1 text-xs text-white/60">
+            +{firstSolver.score} points for the fastest board
+          </p>
+        </motion.div>
+      )}
+
       <p className="text-center text-[11px] font-semibold tracking-[0.3em] text-white/55 uppercase">
-        🎬 Everyone is guessing
+        ⚡ Live players
       </p>
       <p className="mt-1 text-center text-xs text-white/45">
-        {done} of {room.entries.length} finished — the round rolls on until
-        everybody is done.
+        {done} of {all.length} finished — the round runs on until everybody is
+        done. Nobody can see your answers.
       </p>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-        {room.entries.map((entry) => (
-          <li
-            key={entry.playerId}
-            className={cn(
-              "flex items-center gap-2.5 rounded-xl border px-3 py-2",
-              entry.isMine
-                ? "border-primary/40 bg-primary/[0.08]"
-                : "border-white/[0.07] bg-white/[0.02]",
-            )}
-          >
-            <span className="font-display grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#ff5a2c]/70 text-xs text-black">
-              {entry.playerName.charAt(0).toUpperCase()}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm text-white/90">
-              {entry.playerName}
-              {entry.isMine && (
-                <span className="ml-1.5 text-[10px] tracking-wider text-white/40 uppercase">
-                  you
+        {ranked.map((entry) => {
+          const found = discoveredCount(entry);
+          const medal = medalFor(entry.placement);
+          return (
+            <li
+              key={entry.playerId}
+              className={cn(
+                "flex flex-wrap items-center gap-2.5 rounded-xl border px-3 py-2",
+                entry.isMine
+                  ? "border-primary/40 bg-primary/[0.08]"
+                  : "border-white/[0.07] bg-white/[0.02]",
+              )}
+            >
+              <span className="font-display grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-[#ff5a2c]/70 text-xs text-black">
+                {entry.playerName.charAt(0).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm text-white/90">
+                {entry.playerName}
+                {entry.isMine && (
+                  <span className="ml-1.5 text-[10px] tracking-wider text-white/40 uppercase">
+                    you
+                  </span>
+                )}
+              </span>
+              {medal && (
+                <span className="shrink-0 text-base leading-none" title={placementLabel(entry.placement)}>
+                  {medal}
                 </span>
               )}
-            </span>
-            <span className="shrink-0 text-[11px] tabular-nums text-white/45">
-              {entry.lives}/9
-            </span>
-            <StatusPill status={entry.status} />
-          </li>
-        ))}
+              {found === 3 && entry.status === "playing" && (
+                <span className="shrink-0 text-[11px] tracking-wide text-[#ff7a55]">
+                  🔥 close!
+                </span>
+              )}
+              <span className="shrink-0 text-[11px] tabular-nums text-white/60">
+                {found} / 4 discovered
+              </span>
+              <StatusPill status={entry.status} />
+            </li>
+          );
+        })}
       </ul>
     </motion.div>
   );
@@ -265,11 +335,14 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
         <div className="glass-deep rounded-3xl px-6 py-10 text-center">
           <p className="text-4xl">🎟️</p>
           <p className="font-display mt-4 text-2xl tracking-[0.14em] text-white">
-            ROUND {room.round} IS ALREADY PLAYING
+            {room.isShowdown
+              ? "THE FINAL SHOWDOWN IS ON"
+              : `ROUND ${room.round} IS ALREADY PLAYING`}
           </p>
           <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-white/60">
-            You joined after this question went live, so you sit this one out —
-            you get your own fresh nine chances from the next question.
+            {room.isShowdown
+              ? "The title is being decided right now by the players level on points — you're watching this one from the stalls."
+              : "You joined after this question went live, so you sit this one out — you get your own fresh nine chances from the next question."}
           </p>
         </div>
         <AwaitingOthers room={room} />
@@ -489,9 +562,24 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
               <p className="font-display text-3xl tracking-[0.12em] gold-text">
                 🎉 YOU CRACKED ALL FOUR!
               </p>
+              {entry.placement ? (
+                <p className="font-display text-glow-gold mt-3 text-5xl leading-none gold-text">
+                  {medalFor(entry.placement) ?? "🏁"}{" "}
+                  <span className="text-3xl tracking-[0.06em]">
+                    {placementLabel(entry.placement).toUpperCase()}
+                  </span>
+                </p>
+              ) : null}
+              <motion.p
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: "spring", stiffness: 260, damping: 16, delay: 0.15 }}
+                className="font-display mt-2 text-4xl leading-none text-primary"
+              >
+                +{entry.score}
+              </motion.p>
               <p className="mt-2 text-sm text-white/65">
-                Finished with {entry.lives} of 9 chances to spare · +
-                {entry.score} points
+                Finished with {entry.lives} of 9 chances to spare
               </p>
               <p className="mt-1 text-xs text-white/45">
                 Hang tight — the round ends when everyone is done.
@@ -662,6 +750,14 @@ function CreatorPanel({ room, token }: { room: RoomState; token: string }) {
                 <span className="text-[11px] tabular-nums text-white/45">
                   {entry.lives}/9 chances
                 </span>
+                {entry.placement && (
+                  <span
+                    className="shrink-0 text-base leading-none"
+                    title={placementLabel(entry.placement)}
+                  >
+                    {medalFor(entry.placement) ?? "🏁"}
+                  </span>
+                )}
                 {entry.score > 0 && (
                   <span className="font-display text-lg leading-none gold-text">
                     +{entry.score}

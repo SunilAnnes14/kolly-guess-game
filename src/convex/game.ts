@@ -62,9 +62,24 @@ function answerFor(question: Question, category: Category): string {
   }
 }
 
-/** Closing the board with lives to spare is worth more than scraping through. */
-function scoreForSolve(lives: number): number {
-  return (Math.max(0, lives) + 1) * 10;
+/**
+ * Placement points — the race is the whole game, so finishing first is what
+ * pays: 1st 100, 2nd 80, 3rd 60, 4th 40, 5th 20, sixth and beyond 0.
+ */
+function scoreForPlacement(placement: number): number {
+  return Math.max(0, 120 - placement * 20);
+}
+
+/** Everyone sharing the top score — only consulted once a game is over. */
+async function tiedTopPlayers(
+  ctx: Ctx,
+  roomId: Id<"rooms">,
+): Promise<Doc<"players">[]> {
+  const players = await playersInRoom(ctx, roomId);
+  if (players.length < 2) return [];
+  const top = Math.max(...players.map((p) => p.points));
+  const tied = players.filter((p) => p.points === top);
+  return tied.length > 1 ? tied : [];
 }
 
 function generateCode(): string {
@@ -187,9 +202,34 @@ async function settleRound(ctx: MutationCtx, room: Doc<"rooms">) {
   if (entries.length === 0) return;
   if (entries.some((e) => e.status === "playing")) return;
 
-  await ctx.db.patch(room._id, {
-    status: room.round >= room.roundsTotal ? "finished" : "roundComplete",
-  });
+  // The showdown is the last word — nothing follows the tie-break round.
+  if (room.status === "showdown") {
+    await ctx.db.patch(room._id, { status: "finished" });
+    return;
+  }
+
+  if (room.round >= room.roundsTotal) {
+    const tied = await tiedTopPlayers(ctx, room._id);
+    const players = await playersInRoom(ctx, room._id);
+    // Top scores level, and someone is left over to set the decider → race it.
+    if (tied.length > 1 && tied.length < players.length) {
+      const tiedIds = tied.map((p) => p._id);
+      const judge =
+        players.find((p) => !tiedIds.includes(p._id)) ?? players[0];
+      await ctx.db.patch(room._id, {
+        status: "tiebreak",
+        tiebreakIds: tiedIds,
+        creatorId: judge._id,
+        round: room.roundsTotal + 1,
+        question: null,
+      });
+      return;
+    }
+    await ctx.db.patch(room._id, { status: "finished" });
+    return;
+  }
+
+  await ctx.db.patch(room._id, { status: "roundComplete" });
 }
 
 /* ------------------------------------------------------------------ */
@@ -331,6 +371,7 @@ export const getRoom = query({
     const revealedMe = myEntry ? revealedOf(myEntry) : emptyRevealed();
     const chancesUsed = myEntry ? MAX_LIVES - myEntry.lives : 0;
 
+    const tiebreakIds = room.tiebreakIds ?? [];
     const nextRound = roundOver && room.round < room.roundsTotal
       ? room.round + 1
       : null;
@@ -349,6 +390,14 @@ export const getRoom = query({
         players.find((p) => p._id === room.creatorId)?.name ?? null,
       nextCreatorId: nextCreator?._id ?? null,
       nextCreatorName: nextCreator?.name ?? null,
+      /** Non-empty only during a tie-break — who is level at the top. */
+      tiebreakIds,
+      tiebreakNames: players
+        .filter((p) => tiebreakIds.includes(p._id))
+        .map((p) => p.name),
+      /** True while a tie-break decider is being written or raced. */
+      isShowdown:
+        room.status === "tiebreak" || room.status === "showdown",
       question: question
         ? {
             initials: {
@@ -382,6 +431,7 @@ export const getRoom = query({
             guesses: myEntry.guesses,
             status: myEntry.status,
             score: myEntry.score,
+            placement: myEntry.placement ?? null,
             chancesUsed,
             clue: myEntry.clue,
             clueCategory: myEntry.clueCategory ?? null,
@@ -427,6 +477,7 @@ export const getRoom = query({
           revealed: revealedOf(entry),
           status: entry.status,
           score: entry.score,
+          placement: entry.placement ?? null,
           guesses: entry.guesses,
           clueRequested: entry.clueRequested,
           clue: isCreator ? entry.clue : "",
@@ -492,6 +543,7 @@ export const startGame = mutation({
       roundsTotal: players.length,
       creatorId: players[0]._id,
       question: null,
+      tiebreakIds: [],
     });
   },
 });
@@ -515,7 +567,8 @@ export const submitQuestion = mutation({
     if (room.creatorId !== player._id) {
       throw new Error("Only this round's question creator can write it.");
     }
-    if (room.status !== "creating") {
+    const showdown = room.status === "tiebreak";
+    if (room.status !== "creating" && !showdown) {
       throw new Error("A question is already in play.");
     }
 
@@ -536,7 +589,11 @@ export const submitQuestion = mutation({
     }
 
     const players = await playersInRoom(ctx, room._id);
-    const guessers = players.filter((p) => p._id !== player._id);
+    const tiedIds = room.tiebreakIds ?? [];
+    // In a tie-break only the players who are level on points race for it.
+    const guessers = players.filter(
+      (p) => p._id !== player._id && (!showdown || tiedIds.includes(p._id)),
+    );
     if (guessers.length === 0) {
       throw new Error("Share your invite link — you need a friend to play.");
     }
@@ -565,7 +622,7 @@ export const submitQuestion = mutation({
     }
 
     await ctx.db.patch(room._id, {
-      status: "playing",
+      status: showdown ? "showdown" : "playing",
       question: {
         hero: hero.slice(0, 60),
         heroine: heroine.slice(0, 60),
@@ -591,7 +648,9 @@ export const submitGuess = mutation({
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
     if (!room) throw new Error("Room not found.");
-    if (room.status !== "playing") throw new Error("No question is in play.");
+    if (room.status !== "playing" && room.status !== "showdown") {
+      throw new Error("No question is in play.");
+    }
     if (room.creatorId === player._id) {
       throw new Error("You wrote this question — you sit this one out.");
     }
@@ -653,7 +712,9 @@ export const judgeGuess = mutation({
       throw new Error("Guess not found.");
     }
     if (guess.status !== "pending") throw new Error("That guess is no longer waiting.");
-    if (room.status !== "playing") throw new Error("This round has finished.");
+    if (room.status !== "playing" && room.status !== "showdown") {
+      throw new Error("This round has finished.");
+    }
 
     const entry = await entryFor(ctx, room._id, room.round, guess.playerId);
     if (!entry) throw new Error("That player is not in this round.");
@@ -666,7 +727,18 @@ export const judgeGuess = mutation({
       const revealed = revealedOf(entry);
       revealed[category] = true;
       const complete = isComplete(revealed);
-      const score = complete ? scoreForSolve(entry.lives) : entry.score;
+
+      // Closing the board earns a placement, paid the instant it lands.
+      let score = entry.score;
+      let placement: number | undefined = entry.placement;
+      if (complete) {
+        const roundEntries = await entriesForRound(ctx, room._id, room.round);
+        placement =
+          roundEntries.filter(
+            (e) => e.status === "solved" && e._id !== entry._id,
+          ).length + 1;
+        score = scoreForPlacement(placement);
+      }
 
       await ctx.db.patch(guessId, { status: "correct" });
       await ctx.db.patch(guesser._id, {
@@ -678,6 +750,7 @@ export const judgeGuess = mutation({
         revealed,
         status: complete ? "solved" : "playing",
         score,
+        placement: complete ? placement : entry.placement,
         completedAt: complete ? Date.now() : null,
       });
     } else {
@@ -703,7 +776,9 @@ export const requestClue = mutation({
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
     if (!room) throw new Error("Room not found.");
-    if (room.status !== "playing") throw new Error("No question is in play.");
+    if (room.status !== "playing" && room.status !== "showdown") {
+      throw new Error("No question is in play.");
+    }
 
     const entry = await entryFor(ctx, room._id, room.round, player._id);
     if (!entry) throw new Error("You are not guessing this question.");
@@ -735,7 +810,9 @@ export const giveClue = mutation({
     if (room.creatorId !== creator._id) {
       throw new Error("Only this round's question creator can drop a clue.");
     }
-    if (room.status !== "playing") throw new Error("No question is in play.");
+    if (room.status !== "playing" && room.status !== "showdown") {
+      throw new Error("No question is in play.");
+    }
 
     const entry = await entryFor(ctx, room._id, room.round, playerId);
     if (!entry) throw new Error("That player is not in this round.");
@@ -829,6 +906,7 @@ export const restartGame = mutation({
       roundsTotal: 0,
       creatorId: null,
       question: null,
+      tiebreakIds: [],
     });
   },
 });
