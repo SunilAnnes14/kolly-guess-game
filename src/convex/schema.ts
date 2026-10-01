@@ -108,6 +108,14 @@ const schema = defineSchema(
             movie: v.array(v.string()),
             song: v.array(v.string()),
           }),
+          /**
+           * Parts whose answer is public knowledge for this question — set the
+           * moment ANY player guesses that part wrong. A revealed part can no
+           * longer be guessed by anyone (the answer is already on screen) and
+           * it fills that slot on every board, but it never counts as a
+           * discovery for the player who missed it.
+           */
+          revealedCategories: v.optional(v.array(categoryValidator)),
         }),
       ),
       /**

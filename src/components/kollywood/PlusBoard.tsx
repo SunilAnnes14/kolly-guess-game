@@ -12,20 +12,30 @@ import { cn } from "@/lib/utils";
  *                   |
  *                🎵 SONG
  *
- * Every part starts hidden and shows only its initial letter. When the creator
- * approves a guess the part flips to the full answer with a gold reveal; a
- * wrong guess shakes the part that just failed.
+ * Every part starts hidden and shows only its initial letter. There are three
+ * ways a part can fill in:
+ *
+ *   • you found it        → the answer in olive, with your own ✓
+ *   • somebody missed it  → the answer in aged paper, marked ✓ REVEALED,
+ *                           public to the whole room and closed to guessing
+ *   • still hidden        → just the initial letter
+ *
+ * A wrong guess shakes the part that just failed.
  */
 export function PlusBoard({
   initials,
   revealed,
+  revealedToAll,
   values,
   selected,
   onSelect,
   impact,
 }: {
   initials: Record<Category, string>;
+  /** Parts THIS player has personally discovered. */
   revealed: Record<Category, boolean>;
+  /** Parts the whole room already knows, because somebody missed them. */
+  revealedToAll: Record<Category, boolean>;
   values: Record<Category, string | null>;
   selected?: Category | null;
   /** Omit to make the board read-only (e.g. for a preview). */
@@ -39,8 +49,9 @@ export function PlusBoard({
       initial={initials[category]}
       value={values[category]}
       revealed={revealed[category]}
+      openToAll={revealedToAll[category]}
       selected={selected === category}
-      interactive={!!onSelect && !revealed[category]}
+      interactive={!!onSelect && !revealed[category] && !revealedToAll[category]}
       onSelect={onSelect}
       impactId={impact?.category === category ? impact.id : 0}
     />
@@ -96,6 +107,7 @@ function BoardCell({
   initial,
   value,
   revealed,
+  openToAll,
   selected,
   interactive,
   onSelect,
@@ -105,6 +117,7 @@ function BoardCell({
   initial: string;
   value: string | null;
   revealed: boolean;
+  openToAll: boolean;
   selected: boolean;
   interactive: boolean;
   onSelect?: (category: Category) => void;
@@ -113,6 +126,8 @@ function BoardCell({
   const meta = CATEGORY_META[category];
   const controls = useAnimationControls();
   const seenImpact = useRef(impactId);
+  // Either way the answer is on this board; only who found it differs.
+  const shown = revealed || openToAll;
 
   // Burned a chance? Give the part a short, punchy shake.
   useEffect(() => {
@@ -135,16 +150,20 @@ function BoardCell({
         <span
           className={cn(
             "text-[11px] font-bold",
-            revealed ? "text-primary" : "text-white/25",
+            revealed
+              ? "text-primary"
+              : openToAll
+                ? "text-[#c08a6e]"
+                : "text-white/25",
           )}
         >
-          {revealed ? "✓" : "?"}
+          {revealed || openToAll ? "✓" : "?"}
         </span>
       </span>
 
       <span className="mt-1.5 grid min-h-[34px] w-full place-items-center sm:min-h-[40px]">
         <AnimatePresence mode="wait" initial={false}>
-          {revealed && value ? (
+          {shown && value ? (
             <motion.span
               key="value"
               initial={{ opacity: 0, y: 12, scale: 0.85, filter: "blur(8px)" }}
@@ -171,6 +190,12 @@ function BoardCell({
           )}
         </AnimatePresence>
       </span>
+
+      {openToAll && !revealed && (
+        <span className="mt-1 rounded-full border border-[#8a5138]/55 bg-[#8a5138]/15 px-2 py-0.5 text-[9px] font-bold tracking-[0.18em] text-[#c08a6e] uppercase">
+          ✓ Revealed
+        </span>
+      )}
     </>
   );
 
@@ -178,9 +203,11 @@ function BoardCell({
     "flex w-full flex-col items-center rounded-2xl border px-2 py-2.5 text-center transition-all",
     revealed
       ? "border-primary/55 bg-primary/[0.09] shadow-[0_0_26px_rgba(116,124,91,0.16)]"
-      : "border-white/12 bg-white/[0.035]",
+      : openToAll
+        ? "border-[#8a5138]/50 bg-[#8a5138]/[0.1]"
+        : "border-white/12 bg-white/[0.035]",
     selected &&
-      !revealed &&
+      !shown &&
       "border-primary/70 bg-primary/[0.12] ring-2 ring-primary/40",
     interactive && !selected && "hover:-translate-y-0.5 hover:border-primary/45",
   );

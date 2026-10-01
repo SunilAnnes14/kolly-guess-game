@@ -38,8 +38,8 @@ const STEPS = [
   },
   {
     n: "02",
-    title: "Pick the movie and the song",
-    body: "That's the whole job. Hero, heroine and title come straight from the library — everyone else only ever gets the first letter of each part.",
+    title: "Write the four answers",
+    body: "Hero, heroine, movie and song — type them yourself for any Tamil film, or pull them from the built-in library and edit what you like. Everyone else only ever gets the first letter of each part.",
   },
   {
     n: "03",
@@ -58,17 +58,17 @@ const LOOP = [
   {
     icon: "⚡",
     title: "Checked instantly",
-    body: "No judge, no approval queue. The answer is compared against the movie on the server the moment you press submit.",
+    body: "No judge, no approval queue. Your answer is compared against the four answers the creator wrote, the moment you press submit.",
   },
   {
     icon: "✓",
-    title: "Reveal or burn",
-    body: "A correct guess flips that part to the full answer and locks it. A miss burns one KOLLYWOOD letter — yours only.",
+    title: "Keep it, or give it away",
+    body: "Land a part and it is yours alone — nobody else is told. Miss one and the answer goes up on every screen, locked for good. That miss also burns one of your KOLLYWOOD letters.",
   },
   {
     icon: "🏆",
     title: "Solve all four",
-    body: "Get hero, heroine, movie and song on your board and that round is yours. The quicker the solve, the bigger the share of the pot.",
+    body: "Cover hero, heroine, movie and song and that round is yours. The quicker the solve, the bigger the share of the pot.",
   },
   {
     icon: "🔁",
@@ -355,13 +355,19 @@ export default function Landing() {
               className="glass-deep grain rounded-lg px-4 py-8 sm:px-8"
             >
               <p className="font-type text-center text-[10px] tracking-[0.35em] text-[#898675] uppercase">
-                Two parts found
+                One found · one revealed
               </p>
               <div className="mt-6">
                 <PlusBoard
                   initials={{ hero: "V", heroine: "T", movie: "G", song: "A" }}
                   revealed={{
                     hero: true,
+                    heroine: false,
+                    movie: false,
+                    song: false,
+                  }}
+                  revealedToAll={{
+                    hero: false,
                     heroine: true,
                     movie: false,
                     song: false,
@@ -376,8 +382,9 @@ export default function Landing() {
               </div>
               <div className="olive-rule mt-6" />
               <p className="mt-4 text-center text-sm leading-relaxed text-[#898675]">
-                ✓ Vijay and Trisha are on the board. The movie and the song are
-                still hiding behind their initials.
+                ✓ You found Vijay yourself. Trisha went public after somebody
+                guessed her wrong — the movie and the song are still hiding
+                behind their initials.
               </p>
             </motion.div>
 
@@ -409,6 +416,56 @@ export default function Landing() {
               ))}
             </div>
           </div>
+        </section>
+
+        {/* ---------- one miss, everyone knows ---------- */}
+        <section className="mx-auto w-full max-w-4xl px-5 pb-20 sm:pb-28">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-60px" }}
+            transition={{ duration: 0.7, ease: EASE }}
+            className="glass-deep grain rounded-lg px-5 py-9 sm:px-10"
+          >
+            <div className="text-center">
+              <p className="font-type text-[11px] tracking-[0.42em] text-[#c08a6e] uppercase">
+                One miss, everyone knows
+              </p>
+              <h2 className="font-display mt-3 text-3xl tracking-[0.05em] text-[#c0bba1] sm:text-4xl">
+                A right guess is{" "}
+                <span className="paper-text">yours alone.</span>
+              </h2>
+            </div>
+
+            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg border border-[#747c5b]/35 bg-[#596344]/10 px-5 py-5">
+                <p className="font-display text-xl tracking-[0.06em] text-[#c0bba1]">
+                  ✓ You land it
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-[#898675]">
+                  The part flips to the full answer on your board and locks.
+                  Everyone else still sees its first letter — nobody is told
+                  who found what.
+                </p>
+              </div>
+              <div className="rounded-lg border border-[#8a5138]/45 bg-[#8a5138]/10 px-5 py-5">
+                <p className="font-display text-xl tracking-[0.06em] text-[#c08a6e]">
+                  ✕ Somebody misses
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-[#898675]">
+                  That answer goes up on every screen the instant it lands,
+                  marked <span className="text-[#c08a6e]">REVEALED</span>, and
+                  the part closes for the whole room. The miss also burns one
+                  of their nine letters.
+                </p>
+              </div>
+            </div>
+
+            <p className="mx-auto mt-6 max-w-xl text-center text-xs leading-relaxed text-[#898675]/70">
+              Nobody is given credit for a leaked part — the round is still
+              decided by who covers all four first.
+            </p>
+          </motion.div>
         </section>
 
         {/* ---------- nine letters ---------- */}
@@ -531,8 +588,8 @@ export default function Landing() {
               OPEN A SCREENING
             </DialogTitle>
             <DialogDescription className="text-[#898675]">
-              Pick your marquee name — you&apos;ll set the first question from
-              the library.
+              Pick your marquee name — you&apos;ll write the first question
+              yourself.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="grid gap-4">

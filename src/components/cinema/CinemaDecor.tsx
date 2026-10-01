@@ -351,7 +351,11 @@ export function PaperFlash({
   duration?: number;
 }) {
   const doneRef = useRef(onDone);
-  doneRef.current = onDone;
+
+  // Keep the callback fresh without touching a ref during render.
+  useEffect(() => {
+    doneRef.current = onDone;
+  }, [onDone]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => doneRef.current?.(), duration);
@@ -410,7 +414,11 @@ export function FilmCountdown({
 }) {
   const [step, setStep] = useState(0);
   const doneRef = useRef(onDone);
-  doneRef.current = onDone;
+
+  // Keep the callback fresh without touching a ref during render.
+  useEffect(() => {
+    doneRef.current = onDone;
+  }, [onDone]);
 
   useEffect(() => {
     if (step >= COUNTDOWN_STEPS.length) {

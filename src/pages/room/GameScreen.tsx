@@ -35,9 +35,30 @@ import {
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
-/** How many of the four parts someone already has on their board. */
-function discoveredCount(entry: RoomState["entries"][number]): number {
-  return CATEGORY_ORDER.filter((c) => entry.revealed[c]).length;
+/**
+ * Turns the server's list of public parts into a per-category lookup, so a
+ * board can tell "I found it" apart from "everybody knows it".
+ */
+function revealedToAllFrom(room: RoomState): Record<Category, boolean> {
+  return {
+    hero: room.revealedCategories.includes("hero"),
+    heroine: room.revealedCategories.includes("heroine"),
+    movie: room.revealedCategories.includes("movie"),
+    song: room.revealedCategories.includes("song"),
+  };
+}
+
+/**
+ * How many of the four parts someone has on their board. A part the whole room
+ * already knows counts — it needs no guessing any more — but it is never a
+ * discovery of theirs.
+ */
+function discoveredCount(
+  entry: RoomState["entries"][number],
+  revealedToAll: Record<Category, boolean>,
+): number {
+  return CATEGORY_ORDER.filter((c) => entry.revealed[c] || revealedToAll[c])
+    .length;
 }
 
 /** 🥇 / 🥈 / 🥉 for the podium; nothing deeper than third. */
@@ -123,30 +144,83 @@ function RoundBanner({
   );
 }
 
-/** ✓ / ? markers for the four parts on someone else's board. */
-function ProgressDots({ entry }: { entry: RoomState["entries"][number] }) {
+/**
+ * ✓ / ? markers for the four parts on someone else's board. Olive is their own
+ * discovery; ember means the answer went public after somebody missed it.
+ */
+function ProgressDots({
+  entry,
+  revealedToAll,
+}: {
+  entry: RoomState["entries"][number];
+  revealedToAll: Record<Category, boolean>;
+}) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {CATEGORY_ORDER.map((category) => {
         const found = !!entry.revealed[category];
+        const open = revealedToAll[category];
         const meta = CATEGORY_META[category];
         return (
           <span
             key={category}
-            title={`${meta.label}: ${found ? "found" : "not found yet"}`}
+            title={`${meta.label}: ${
+              found ? "found" : open ? "revealed to everyone" : "not found yet"
+            }`}
             className={cn(
               "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-[0.1em] uppercase",
               found
                 ? "border-primary/45 bg-primary/10 text-primary"
-                : "border-white/12 text-white/35",
+                : open
+                  ? "border-[#8a5138]/50 bg-[#8a5138]/10 text-[#c08a6e]"
+                  : "border-white/12 text-white/35",
             )}
           >
             <span aria-hidden>{meta.icon}</span>
-            {found ? "✓" : "?"}
+            {found || open ? "✓" : "?"}
           </span>
         );
       })}
     </div>
+  );
+}
+
+/**
+ * The room's noticeboard: every part whose answer is now on everyone's screen
+ * because somebody guessed it wrong. Nobody earned it, so it reads as a miss,
+ * not a win.
+ */
+function RevealedStrip({ room }: { room: RoomState }) {
+  if (!room.question || room.revealedCategories.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 240, damping: 22 }}
+      className="mt-6 rounded-2xl border border-[#8a5138]/45 bg-[#8a5138]/[0.08] px-4 py-3"
+    >
+      <p className="text-[10px] font-semibold tracking-[0.28em] text-[#c08a6e] uppercase">
+        ❌ Missed — out in the open
+      </p>
+      <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5">
+        {room.revealedCategories.map((category) => (
+          <li key={category} className="flex items-center gap-1.5">
+            <span aria-hidden>{CATEGORY_META[category].icon}</span>
+            <span className="text-[10px] tracking-[0.16em] text-white/45 uppercase">
+              {CATEGORY_META[category].label}
+            </span>
+            <span className="font-display text-base leading-none text-[#e7e3d2]">
+              {room.question?.values[category]}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[11px] leading-relaxed text-white/45">
+        These parts are closed to guessing now. Whatever you found yourself is
+        still yours — this one was simply given away.
+      </p>
+    </motion.div>
   );
 }
 
@@ -227,13 +301,16 @@ function SolveBroadcast({ room }: { room: RoomState }) {
 
 function AwaitingOthers({ room }: { room: RoomState }) {
   const all = room.entries;
+  const revealedToAll = revealedToAllFrom(room);
   const done = all.filter((e) => e.status !== "playing").length;
   // Podium finishers first, then whoever is furthest along the board.
   const ranked = [...all].sort((a, b) => {
     const pa = a.placement ?? 99;
     const pb = b.placement ?? 99;
     if (pa !== pb) return pa - pb;
-    return discoveredCount(b) - discoveredCount(a);
+    return (
+      discoveredCount(b, revealedToAll) - discoveredCount(a, revealedToAll)
+    );
   });
   const firstSolver = ranked.find((e) => e.status === "solved");
 
@@ -268,7 +345,7 @@ function AwaitingOthers({ room }: { room: RoomState }) {
       </p>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2">
         {ranked.map((entry) => {
-          const found = discoveredCount(entry);
+          const found = discoveredCount(entry, revealedToAll);
           const medal = medalFor(entry.placement);
           return (
             <li
@@ -353,6 +430,8 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
     movie: false,
     song: false,
   };
+  // Parts the whole room already knows — closed to guessing for everyone.
+  const revealedToAll = revealedToAllFrom(room);
   const previousLives = useRef(entry?.lives ?? 9);
 
   // A burned letter shakes the part that just failed on MY board.
@@ -385,6 +464,28 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
     previousStatus.current = entry?.status;
   }, [entry?.status, entry?.placement, entry?.score]);
 
+  // Somebody missed a part: its answer just went public on every screen. The
+  // player who guessed it wrong already heard the buzzer locally, so everyone
+  // else gets the cue here.
+  const seenReveals = useRef<Set<Category> | null>(null);
+  useEffect(() => {
+    const nowPublic = new Set<Category>(room.revealedCategories);
+    const seen = seenReveals.current;
+    if (!seen) {
+      // Whatever is already public when you arrive is old news.
+      seenReveals.current = nowPublic;
+      return;
+    }
+    const mine = room.guesses[room.guesses.length - 1];
+    for (const category of nowPublic) {
+      if (seen.has(category)) continue;
+      seen.add(category);
+      if (!(mine?.status === "wrong" && mine.category === category)) {
+        playSound("wrong");
+      }
+    }
+  }, [room.revealedCategories, room.guesses]);
+
   // Late arrivals have no board for a question that's already live.
   if (!entry || !question) {
     return (
@@ -412,9 +513,10 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
   // pick sticks until it is solved, otherwise the first open part wins.
   const active: Category | null = !playing
     ? null
-    : selected && !revealed[selected]
+    : selected && !revealed[selected] && !revealedToAll[selected]
       ? selected
-      : (CATEGORY_ORDER.find((c) => !revealed[c]) ?? null);
+      : (CATEGORY_ORDER.find((c) => !revealed[c] && !revealedToAll[c]) ??
+        null);
   const meta = active ? CATEGORY_META[active] : null;
 
   const handleSubmit = async (event: FormEvent) => {
@@ -487,10 +589,13 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
           )}
         </RoundBanner>
 
+        <RevealedStrip room={room} />
+
         <div className="mt-6">
           <PlusBoard
             initials={question.initials}
             revealed={revealed}
+            revealedToAll={revealedToAll}
             values={question.values}
             selected={active}
             onSelect={playing ? setSelected : undefined}
@@ -620,6 +725,7 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
                     key={category}
                     category={category}
                     found={revealed[category]}
+                    open={revealedToAll[category]}
                     active={active === category}
                     onSelect={setSelected}
                   />
@@ -655,8 +761,8 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
               </div>
 
               <p className="text-center text-[11px] text-white/40">
-                Answered instantly — a right guess locks the part, a wrong one
-                burns a letter.
+                Answered instantly — a right guess locks the part for you. A
+                wrong one burns a letter and shows the answer to everyone.
               </p>
 
               {meta && (
@@ -744,34 +850,46 @@ function GuesserScreen({ room, token }: { room: RoomState; token: string }) {
 function CategoryButton({
   category,
   found,
+  open,
   active,
   onSelect,
 }: {
   category: Category;
   found: boolean;
+  /** The answer is already public, so there is nothing left to guess. */
+  open: boolean;
   active: boolean;
   onSelect: (category: Category) => void;
 }) {
   const meta = CATEGORY_META[category];
+  const locked = found || open;
   return (
     <button
       type="button"
-      disabled={found}
+      disabled={locked}
       onClick={() => onSelect(category)}
       aria-pressed={active}
-      title={found ? `${meta.label} solved` : undefined}
+      title={
+        found
+          ? `${meta.label} solved`
+          : open
+            ? `${meta.label} revealed to everyone`
+            : undefined
+      }
       className={cn(
         "flex h-12 items-center justify-center gap-1.5 rounded-xl border text-sm font-semibold transition-all",
         found
           ? "cursor-default border-primary/35 bg-primary/[0.07] text-primary/70"
-          : active
-            ? "-translate-y-0.5 border-primary/70 bg-primary/15 text-primary shadow-[0_8px_24px_rgba(116,124,91,0.2)]"
-            : "border-white/12 bg-white/[0.04] text-white/70 hover:-translate-y-0.5 hover:border-primary/45 hover:text-white",
+          : open
+            ? "cursor-not-allowed border-[#8a5138]/45 bg-[#8a5138]/[0.08] text-[#c08a6e]/80"
+            : active
+              ? "-translate-y-0.5 border-primary/70 bg-primary/15 text-primary shadow-[0_8px_24px_rgba(116,124,91,0.2)]"
+              : "border-white/12 bg-white/[0.04] text-white/70 hover:-translate-y-0.5 hover:border-primary/45 hover:text-white",
       )}
     >
       <span aria-hidden>{meta.icon}</span>
       {meta.label}
-      {found && <Check className="h-3.5 w-3.5" />}
+      {locked && <Check className="h-3.5 w-3.5" />}
     </button>
   );
 }
@@ -784,6 +902,7 @@ function CreatorPanel({ room, token }: { room: RoomState; token: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const answer = room.answerKey;
+  const revealedToAll = revealedToAllFrom(room);
   const finished = room.entries.filter((e) => e.status !== "playing").length;
   const clueRequests = room.entries.filter((e) => e.clueRequested && !e.clue);
 
@@ -805,8 +924,9 @@ function CreatorPanel({ room, token }: { room: RoomState; token: string }) {
           once everybody is done.
         </p>
         <p className="mx-auto mt-2 max-w-md text-center text-[11px] leading-relaxed text-white/40">
-          Every answer is checked automatically against your movie. You don&apos;t
-          judge anything — you just watch the boards fill in.
+          Every guess is checked automatically against the answers you wrote.
+          You don&apos;t judge anything — but when somebody misses, that answer
+          goes public for everyone.
         </p>
 
         {/* ---------- answer key ---------- */}
@@ -870,7 +990,7 @@ function CreatorPanel({ room, token }: { room: RoomState; token: string }) {
               </div>
 
               <div className="mt-3">
-                <ProgressDots entry={entry} />
+                <ProgressDots entry={entry} revealedToAll={revealedToAll} />
               </div>
 
               {/* the clue you already handed over */}
@@ -888,6 +1008,7 @@ function CreatorPanel({ room, token }: { room: RoomState; token: string }) {
                   <ClueForm
                     token={token}
                     entry={entry}
+                    revealedToAll={revealedToAll}
                     onError={setError}
                   />
                 )}
@@ -915,14 +1036,19 @@ function CreatorPanel({ room, token }: { room: RoomState; token: string }) {
 function ClueForm({
   token,
   entry,
+  revealedToAll,
   onError,
 }: {
   token: string;
   entry: RoomState["entries"][number];
+  revealedToAll: Record<Category, boolean>;
   onError: (message: string | null) => void;
 }) {
   const giveClue = useMutation(api.game.giveClue);
-  const available = CATEGORY_ORDER.filter((c) => !entry.revealed[c]);
+  // A part the whole room already knows needs no clue.
+  const available = CATEGORY_ORDER.filter(
+    (c) => !entry.revealed[c] && !revealedToAll[c],
+  );
   const [category, setCategory] = useState<Category>(available[0] ?? "movie");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -984,7 +1110,7 @@ function ClueForm({
         />
         <button
           type="submit"
-          disabled={busy || !text.trim()}
+          disabled={busy || !text.trim() || !available.includes(category)}
           className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[#c0bba1] px-4 text-sm font-semibold text-black transition-all hover:-translate-y-0.5 disabled:opacity-55"
         >
           {busy ? (

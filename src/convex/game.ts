@@ -5,6 +5,7 @@ import {
   findMovieById,
   typedAliases,
   type AnswerCategory,
+  type MovieRecord,
 } from "../lib/movieDataset";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -49,8 +50,45 @@ function revealedOf(entry: { revealed?: Revealed | null }): Revealed {
   return { ...emptyRevealed(), ...(entry.revealed ?? {}) };
 }
 
-function isComplete(revealed: Revealed): boolean {
-  return CATEGORY_ORDER.every((c) => revealed[c]);
+/**
+ * A board is closed only when all four parts are filled — either because the
+ * player found them, or because the whole room did after somebody guessed that
+ * part wrong. A room-wide reveal is common knowledge, so it fills the slot for
+ * everybody: what it can never do is hand out the discovery itself.
+ */
+function boardComplete(
+  revealed: Revealed,
+  globallyRevealed: readonly Category[],
+): boolean {
+  return CATEGORY_ORDER.every(
+    (c) => revealed[c] || globallyRevealed.includes(c),
+  );
+}
+
+/**
+ * Approved spellings for one question.
+ *
+ * A field the creator left matching the library row it came from borrows that
+ * row's real-world aliases ("Thalapathy Vijay", "GOAT"…). A field they typed
+ * or edited is accepted on its own spelling alone, so a hand-written name can
+ * never be matched by a stale library alias.
+ */
+function buildAliases(
+  picked: MovieRecord | null,
+  values: Record<AnswerCategory, string>,
+): Record<AnswerCategory, string[]> {
+  const typed = typedAliases(values);
+  if (!picked) return typed;
+  const song = picked.songs.includes(values.song)
+    ? values.song
+    : (picked.songs[0] ?? values.song);
+  const library = answerAliasesFor(picked, song);
+  return {
+    hero: values.hero === picked.hero ? library.hero : typed.hero,
+    heroine: values.heroine === picked.heroine ? library.heroine : typed.heroine,
+    movie: values.movie === picked.movie ? library.movie : typed.movie,
+    song: values.song === song ? library.song : typed.song,
+  };
 }
 
 type Ctx = QueryCtx | MutationCtx;
@@ -263,6 +301,49 @@ async function settleRound(ctx: MutationCtx, room: Doc<"rooms">) {
   await ctx.db.patch(room._id, { status: "roundComplete" });
 }
 
+/**
+ * Hand a board a finishing position the moment it is fully covered.
+ *
+ * Used after a wrong guess puts an answer on the room's noticeboard: everyone
+ * still racing who now knows all four parts is finished, standing decided by
+ * the parts they still had to find themselves. Placement is paid in entry
+ * order, so the players who were closest to the end land first.
+ */
+async function awardRevealedCompletions(
+  ctx: MutationCtx,
+  room: Doc<"rooms">,
+) {
+  const globallyRevealed = room.question?.revealedCategories ?? [];
+  if (globallyRevealed.length === 0) return;
+
+  const racing = (await entriesForRound(ctx, room._id, room.round))
+    .filter((e) => e.status === "playing")
+    .sort((a, b) => a.createdAt - b.createdAt);
+
+  for (const entry of racing) {
+    if (!boardComplete(revealedOf(entry), globallyRevealed)) continue;
+    const siblings = await entriesForRound(ctx, room._id, room.round);
+    const placement =
+      siblings.filter((e) => e.status === "solved" && e._id !== entry._id)
+        .length + 1;
+    const score = scoreForPlacement(placement);
+    const player = await ctx.db.get(entry.playerId);
+
+    await ctx.db.patch(entry._id, {
+      status: "solved",
+      placement,
+      score,
+      completedAt: Date.now(),
+    });
+    if (player) {
+      await ctx.db.patch(player._id, {
+        points: player.points + (score - entry.score),
+        solves: (player.solves ?? 0) + 1,
+      });
+    }
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Room lifecycle                                                      */
 /* ------------------------------------------------------------------ */
@@ -387,6 +468,8 @@ export const getRoom = query({
     const entries = (await entriesForRound(ctx, room._id, room.round)).sort(
       (a, b) => a.createdAt - b.createdAt,
     );
+    // Parts whose answer is already public because somebody missed them.
+    const revealedCategories: Category[] = question?.revealedCategories ?? [];
     const guesses = await guessesForRound(ctx, room._id, room.round);
     const myEntry = entries.find((e) => e.playerId === me?._id) ?? null;
 
@@ -395,6 +478,10 @@ export const getRoom = query({
     const valueFor = (category: Category): string | null => {
       if (!question) return null;
       if (holdsAnswerKey) return answerFor(question, category);
+      // Somebody missed this part, so the answer is on everybody's screen.
+      if (revealedCategories.includes(category)) {
+        return answerFor(question, category);
+      }
       const mine = myEntry ? revealedOf(myEntry)[category] : false;
       return mine ? answerFor(question, category) : null;
     };
@@ -454,6 +541,11 @@ export const getRoom = query({
             song: question.song,
           }
         : null,
+      /**
+       * Parts whose answer is public knowledge for EVERY player right now,
+       * because somebody in the room guessed them wrong.
+       */
+      revealedCategories,
       /** The viewer's own nine chances, board and clue. Never anyone else's. */
       entry: myEntry
         ? {
@@ -566,10 +658,14 @@ export const startGame = mutation({
 });
 
 /**
- * The round's creator writes ONE question by picking a movie (and a song from
- * it). The library row is the source of truth for all four answers and for the
- * approved aliases, so from this moment on validation is entirely automatic —
- * the creator never judges, scores or approves anything again.
+ * The round's creator writes ONE question with four answers of their own
+ * choosing: hero, heroine, movie and song.
+ *
+ * The movie library is only a head start — the creator can pick a row to
+ * prefill the four fields, edit any of them afterwards, or skip the library
+ * entirely and type a film nobody has heard of. Whatever they send back is the
+ * authoritative answer, so from this moment on validation is entirely
+ * automatic: the creator never judges, scores or approves anything again.
  */
 export const submitQuestion = mutation({
   args: {
@@ -594,15 +690,16 @@ export const submitQuestion = mutation({
       throw new Error("A question is already in play.");
     }
 
-    // A library pick wins outright; anything typed in is used verbatim.
+    // The creator's own entries are authoritative. A library pick only fills
+    // in whatever they left blank, so an edit made on the form always wins.
     const picked = args.movieId ? findMovieById(args.movieId) : null;
-    const hero = (picked?.hero ?? args.hero ?? "").trim();
-    const heroine = (picked?.heroine ?? args.heroine ?? "").trim();
-    const movie = (picked?.movie ?? args.movie ?? "").trim();
-    const song = (args.song ?? "").trim() || picked?.songs[0] || "";
+    const hero = (args.hero ?? "").trim() || (picked?.hero ?? "");
+    const heroine = (args.heroine ?? "").trim() || (picked?.heroine ?? "");
+    const movie = (args.movie ?? "").trim() || (picked?.movie ?? "");
+    const song = (args.song ?? "").trim() || (picked?.songs[0] ?? "");
 
     if (!hero || !heroine || !movie || !song) {
-      throw new Error("Pick a movie (and one of its songs) to set the question.");
+      throw new Error("Fill in the hero, heroine, movie and song.");
     }
     if (
       movie.length > 80 ||
@@ -611,9 +708,6 @@ export const submitQuestion = mutation({
       heroine.length > 60
     ) {
       throw new Error("One of those entries is too long.");
-    }
-    if (picked && !picked.songs.includes(song)) {
-      throw new Error("Pick one of that movie's songs.");
     }
 
     const players = await playersInRoom(ctx, room._id);
@@ -650,9 +744,7 @@ export const submitQuestion = mutation({
     }
 
     const questionId = crypto.randomUUID();
-    const aliases = picked
-      ? answerAliasesFor(picked, song)
-      : typedAliases({ hero, heroine, movie, song });
+    const aliases = buildAliases(picked, { hero, heroine, movie, song });
 
     await ctx.db.patch(room._id, {
       status: showdown ? "showdown" : "playing",
@@ -674,6 +766,8 @@ export const submitQuestion = mutation({
           movie: aliases.movie.slice(0, 12),
           song: aliases.song.slice(0, 12),
         },
+        // Nothing is public until somebody misses a part.
+        revealedCategories: [],
       },
     });
 
@@ -684,10 +778,14 @@ export const submitQuestion = mutation({
 /**
  * One guess aimed at ONE part — validated and settled entirely on the server.
  *
- * Correct → that part is revealed and locked for THIS player only. Wrong →
- * one KOLLYWOOD letter burns, this player only. Closing all four parts stamps
- * a finishing position and pays its points immediately, so nobody's browser
- * can talk its way to a better score.
+ * Correct → that part is revealed and locked for THIS player only, so the
+ * race keeps going and nobody is told who found what. Wrong → one KOLLYWOOD
+ * letter burns AND the answer goes on the room's noticeboard: from that
+ * instant every player sees it, nobody may guess that part again, and the
+ * board it fills counts for the players still racing (never as a discovery
+ * they can claim). Closing all four parts stamps a finishing position and
+ * pays its points immediately, so nobody's browser can talk its way to a
+ * better score.
  */
 export const submitGuess = mutation({
   args: {
@@ -713,6 +811,11 @@ export const submitGuess = mutation({
     if (entry.status !== "playing") {
       throw new Error("You have already finished this question.");
     }
+    const globallyRevealed = question.revealedCategories ?? [];
+    // Somebody already missed this part, so the whole room knows the answer.
+    if (globallyRevealed.includes(category)) {
+      throw new Error("That answer is already out in the open.");
+    }
     // A solved part is locked — no farming it for extra points.
     if (revealedOf(entry)[category]) {
       throw new Error("That part is already on your board.");
@@ -736,13 +839,16 @@ export const submitGuess = mutation({
 
     let revealed = revealedOf(entry);
     let solved = false;
+    let revealedGlobally = false;
     let placement: number | null = entry.placement ?? null;
     let score = entry.score;
     let lives = entry.lives;
 
     if (correct) {
       revealed = { ...revealed, [category]: true };
-      solved = isComplete(revealed);
+      // A part the room already knows counts as filled, so a player who has
+      // only the remaining parts left can still close their board.
+      solved = boardComplete(revealed, globallyRevealed);
 
       if (solved) {
         // Closing the board earns a placement, paid the instant it lands.
@@ -775,17 +881,35 @@ export const submitGuess = mutation({
         status: lives === 0 ? "failed" : "playing",
         completedAt: lives === 0 ? now : null,
       });
+      // The miss is public: the answer now shows on every screen, this part is
+      // closed to further guesses, and it no longer has to be found by anyone.
+      if (!globallyRevealed.includes(category)) {
+        revealedGlobally = true;
+        await ctx.db.patch(room._id, {
+          question: {
+            ...question,
+            revealedCategories: [...globallyRevealed, category],
+          },
+        });
+      }
     }
 
     // Only the fresh row tells us whether everyone is done.
     const fresh = await ctx.db.get(room._id);
-    if (fresh) await settleRound(ctx, fresh);
+    if (fresh) {
+      if (!correct && revealedGlobally) {
+        await awardRevealedCompletions(ctx, fresh);
+      }
+      await settleRound(ctx, fresh);
+    }
 
     return {
       correct,
       category,
       /** The answer itself, handed back only on a correct guess. */
       answer: correct ? answerFor(question, category) : null,
+      /** True when a wrong guess just put this answer on every screen. */
+      revealedGlobally,
       solved,
       placement,
       score,
@@ -846,7 +970,8 @@ export const giveClue = mutation({
     if (!entry.clueRequested && MAX_LIVES - entry.lives < CLUE_UNLOCK_USED) {
       throw new Error("That player hasn't reached the clue yet.");
     }
-    if (revealedOf(entry)[category]) {
+    const publiclyRevealed = room.question?.revealedCategories ?? [];
+    if (revealedOf(entry)[category] || publiclyRevealed.includes(category)) {
       throw new Error("That part is already on their board.");
     }
 
