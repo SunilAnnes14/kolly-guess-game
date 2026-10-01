@@ -62,8 +62,8 @@ const LOOP = [
   },
   {
     icon: "✓",
-    title: "Keep it, or give it away",
-    body: "Land a part and it is yours alone — nobody else is told. Miss one and the answer goes up on every screen, locked for good. That miss also burns one of your KOLLYWOOD letters.",
+    title: "Right stays secret, wrong goes public",
+    body: "Land a part and it is yours alone — nobody else is ever told the answer. Miss one and your wrong guess is posted for the whole room to read — the answer itself never shows. That miss also burns one of your KOLLYWOOD letters.",
   },
   {
     icon: "🏆",
@@ -355,7 +355,7 @@ export default function Landing() {
               className="glass-deep grain rounded-lg px-4 py-8 sm:px-8"
             >
               <p className="font-type text-center text-[10px] tracking-[0.35em] text-[#898675] uppercase">
-                One found · one revealed
+                One found · three still hiding
               </p>
               <div className="mt-6">
                 <PlusBoard
@@ -363,12 +363,6 @@ export default function Landing() {
                   revealed={{
                     hero: true,
                     heroine: false,
-                    movie: false,
-                    song: false,
-                  }}
-                  revealedToAll={{
-                    hero: false,
-                    heroine: true,
                     movie: false,
                     song: false,
                   }}
@@ -382,9 +376,9 @@ export default function Landing() {
               </div>
               <div className="olive-rule mt-6" />
               <p className="mt-4 text-center text-sm leading-relaxed text-[#898675]">
-                ✓ You found Vijay yourself. Trisha went public after somebody
-                guessed her wrong — the movie and the song are still hiding
-                behind their initials.
+                ✓ You found Vijay — only your board shows it. The heroine,
+                movie and song stay behind their initials for everyone else,
+                no matter who guesses what.
               </p>
             </motion.div>
 
@@ -429,7 +423,7 @@ export default function Landing() {
           >
             <div className="text-center">
               <p className="font-type text-[11px] tracking-[0.42em] text-[#c08a6e] uppercase">
-                One miss, everyone knows
+                Misses become clues
               </p>
               <h2 className="font-display mt-3 text-3xl tracking-[0.05em] text-[#c0bba1] sm:text-4xl">
                 A right guess is{" "}
@@ -444,8 +438,8 @@ export default function Landing() {
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-[#898675]">
                   The part flips to the full answer on your board and locks.
-                  Everyone else still sees its first letter — nobody is told
-                  who found what.
+                  Everyone else still shows its first letter — nobody is told
+                  the answer, or who found it.
                 </p>
               </div>
               <div className="rounded-lg border border-[#8a5138]/45 bg-[#8a5138]/10 px-5 py-5">
@@ -453,17 +447,19 @@ export default function Landing() {
                   ✕ Somebody misses
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-[#898675]">
-                  That answer goes up on every screen the instant it lands,
-                  marked <span className="text-[#c08a6e]">REVEALED</span>, and
-                  the part closes for the whole room. The miss also burns one
-                  of their nine letters.
+                  The room sees the guess itself in the live feed —
+                  <span className="text-[#c08a6e]"> “Arun · HERO → AJITH ❌”</span>{" "}
+                  — never the answer. That part stays a question mark for
+                  everyone, open for anyone to solve. The miss burns one of
+                  their nine letters.
                 </p>
               </div>
             </div>
 
             <p className="mx-auto mt-6 max-w-xl text-center text-xs leading-relaxed text-[#898675]/70">
-              Nobody is given credit for a leaked part — the round is still
-              decided by who covers all four first.
+              Read the room's misses like clues — and keep your finds to
+              yourself. The complete answer key comes out only when the round
+              is over.
             </p>
           </motion.div>
         </section>

@@ -129,14 +129,22 @@ function PlayerAvatar({ name }: { name: string }) {
   );
 }
 
-/** The four parts of the round's answer. */
+/**
+ * The full answer key — the FIRST moment everybody gets to see it.
+ *
+ * During the round the answers are private to whoever found them; only once
+ * every player has finished or burned out does the whole room get the reveal.
+ */
 function AnswerCard({ room, delay = 0.3 }: { room: RoomState; delay?: number }) {
   const answer = room.answerKey;
   if (!answer) return null;
 
   return (
     <div className="mx-auto mt-5 max-w-md">
-      <div className="text-center">
+      <p className="text-center text-[10px] font-semibold tracking-[0.4em] text-[#c08a6e] uppercase">
+        🎟 Answer reveal
+      </p>
+      <div className="mt-3 text-center">
         <RevealWord
           text={answer.movie}
           className="font-display text-glow-gold text-5xl leading-none tracking-[0.05em] gold-text sm:text-6xl"

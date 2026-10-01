@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { isAnswerCorrect } from "../lib/answers";
+import { isAnswerCorrect, normalizeAnswer } from "../lib/answers";
 import {
   answerAliasesFor,
   findMovieById,
@@ -32,6 +32,14 @@ const MAX_GUESS = 90;
 export const CATEGORY_ORDER = ["hero", "heroine", "movie", "song"] as const;
 export type Category = (typeof CATEGORY_ORDER)[number];
 
+/** Player-facing names for the four parts — used in guess messages. */
+const CATEGORY_LABELS: Record<Category, string> = {
+  hero: "Hero",
+  heroine: "Heroine",
+  movie: "Movie",
+  song: "Song",
+};
+
 type Revealed = Record<Category, boolean>;
 
 const categoryValidator = v.union(
@@ -51,18 +59,12 @@ function revealedOf(entry: { revealed?: Revealed | null }): Revealed {
 }
 
 /**
- * A board is closed only when all four parts are filled — either because the
- * player found them, or because the whole room did after somebody guessed that
- * part wrong. A room-wide reveal is common knowledge, so it fills the slot for
- * everybody: what it can never do is hand out the discovery itself.
+ * A board is closed only when THIS player has personally found all four
+ * parts. A wrong guess reveals nothing, so nothing but their own discoveries
+ * can ever fill a slot — and nothing they find is ever shown to anyone else.
  */
-function boardComplete(
-  revealed: Revealed,
-  globallyRevealed: readonly Category[],
-): boolean {
-  return CATEGORY_ORDER.every(
-    (c) => revealed[c] || globallyRevealed.includes(c),
-  );
+function boardComplete(revealed: Revealed): boolean {
+  return CATEGORY_ORDER.every((c) => revealed[c]);
 }
 
 /**
@@ -301,49 +303,6 @@ async function settleRound(ctx: MutationCtx, room: Doc<"rooms">) {
   await ctx.db.patch(room._id, { status: "roundComplete" });
 }
 
-/**
- * Hand a board a finishing position the moment it is fully covered.
- *
- * Used after a wrong guess puts an answer on the room's noticeboard: everyone
- * still racing who now knows all four parts is finished, standing decided by
- * the parts they still had to find themselves. Placement is paid in entry
- * order, so the players who were closest to the end land first.
- */
-async function awardRevealedCompletions(
-  ctx: MutationCtx,
-  room: Doc<"rooms">,
-) {
-  const globallyRevealed = room.question?.revealedCategories ?? [];
-  if (globallyRevealed.length === 0) return;
-
-  const racing = (await entriesForRound(ctx, room._id, room.round))
-    .filter((e) => e.status === "playing")
-    .sort((a, b) => a.createdAt - b.createdAt);
-
-  for (const entry of racing) {
-    if (!boardComplete(revealedOf(entry), globallyRevealed)) continue;
-    const siblings = await entriesForRound(ctx, room._id, room.round);
-    const placement =
-      siblings.filter((e) => e.status === "solved" && e._id !== entry._id)
-        .length + 1;
-    const score = scoreForPlacement(placement);
-    const player = await ctx.db.get(entry.playerId);
-
-    await ctx.db.patch(entry._id, {
-      status: "solved",
-      placement,
-      score,
-      completedAt: Date.now(),
-    });
-    if (player) {
-      await ctx.db.patch(player._id, {
-        points: player.points + (score - entry.score),
-        solves: (player.solves ?? 0) + 1,
-      });
-    }
-  }
-}
-
 /* ------------------------------------------------------------------ */
 /* Room lifecycle                                                      */
 /* ------------------------------------------------------------------ */
@@ -468,8 +427,6 @@ export const getRoom = query({
     const entries = (await entriesForRound(ctx, room._id, room.round)).sort(
       (a, b) => a.createdAt - b.createdAt,
     );
-    // Parts whose answer is already public because somebody missed them.
-    const revealedCategories: Category[] = question?.revealedCategories ?? [];
     const guesses = await guessesForRound(ctx, room._id, room.round);
     const myEntry = entries.find((e) => e.playerId === me?._id) ?? null;
 
@@ -478,10 +435,7 @@ export const getRoom = query({
     const valueFor = (category: Category): string | null => {
       if (!question) return null;
       if (holdsAnswerKey) return answerFor(question, category);
-      // Somebody missed this part, so the answer is on everybody's screen.
-      if (revealedCategories.includes(category)) {
-        return answerFor(question, category);
-      }
+      // The answer is private: only the player who found this part sees it.
       const mine = myEntry ? revealedOf(myEntry)[category] : false;
       return mine ? answerFor(question, category) : null;
     };
@@ -542,10 +496,22 @@ export const getRoom = query({
           }
         : null,
       /**
-       * Parts whose answer is public knowledge for EVERY player right now,
-       * because somebody in the room guessed them wrong.
+       * The room's live miss feed: every WRONG guess made this round, oldest
+       * first. Correct guesses are NEVER listed here — they stay private to
+       * the player who found them. This is the only public guess information
+       * in the game: player + category + wrong text, never the answer.
        */
-      revealedCategories,
+      wrongGuesses: guesses
+        .filter((g) => g.status === "wrong")
+        .map((g) => ({
+          id: g._id,
+          playerId: g.playerId,
+          playerName: g.playerName,
+          category: (g.category ?? "movie") as Category,
+          text: g.text,
+          normalized: g.normalized || normalizeAnswer(g.text),
+          createdAt: g.createdAt,
+        })),
       /** The viewer's own nine chances, board and clue. Never anyone else's. */
       entry: myEntry
         ? {
@@ -766,8 +732,6 @@ export const submitQuestion = mutation({
           movie: aliases.movie.slice(0, 12),
           song: aliases.song.slice(0, 12),
         },
-        // Nothing is public until somebody misses a part.
-        revealedCategories: [],
       },
     });
 
@@ -778,27 +742,42 @@ export const submitQuestion = mutation({
 /**
  * One guess aimed at ONE part — validated and settled entirely on the server.
  *
- * Correct → that part is revealed and locked for THIS player only, so the
- * race keeps going and nobody is told who found what. Wrong → one KOLLYWOOD
- * letter burns AND the answer goes on the room's noticeboard: from that
- * instant every player sees it, nobody may guess that part again, and the
- * board it fills counts for the players still racing (never as a discovery
- * they can claim). Closing all four parts stamps a finishing position and
- * pays its points immediately, so nobody's browser can talk its way to a
- * better score.
+ * Two visibility rules, and they are completely different:
+ *
+ *   • WRONG   → one KOLLYWOOD letter burns and the guess TEXT itself becomes
+ *               a public clue (player + category + wrong text on the room's
+ *               miss feed). The actual answer is NEVER revealed — not to the
+ *               room, not even to the player who missed. Misses never solve
+ *               or lock a part for anyone.
+ *   • CORRECT → the answer is handed back only to the guesser; every other
+ *               board still shows "?" for that part until the round ends.
+ *
+ * Repeats are server-authoritative: a normalized guess this player already
+ * made for this part is ignored — no chance spent, no feed spam — and a
+ * replayed submissionId (double-click, second tab) is answered from the row
+ * the first request already wrote. Closing all four parts stamps a finishing
+ * position and pays its points immediately, so no browser can talk its way
+ * to a better score.
  */
 export const submitGuess = mutation({
   args: {
     token: v.string(),
     category: categoryValidator,
     text: v.string(),
+    /** Idempotency key — the same submission is only ever processed once. */
+    submissionId: v.optional(v.string()),
   },
-  handler: async (ctx, { token, category, text }) => {
+  handler: async (ctx, { token, category, text, submissionId }) => {
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
     if (!room) throw new Error("Room not found.");
     if (room.status !== "playing" && room.status !== "showdown") {
-      throw new Error("No question is in play.");
+      // A stale tab firing after the whistle must never touch score or state.
+      throw new Error(
+        room.status === "roundComplete" || room.status === "finished"
+          ? "ROUND HAS ENDED — no more guesses for this question."
+          : "No question is in play.",
+      );
     }
     const question = room.question;
     if (!question) throw new Error("No question is in play.");
@@ -808,30 +787,83 @@ export const submitGuess = mutation({
 
     const entry = await entryFor(ctx, room._id, room.round, player._id);
     if (!entry) throw new Error("You are not guessing this question.");
-    if (entry.status !== "playing") {
-      throw new Error("You have already finished this question.");
+
+    // Every guess this player has made on this question — the single source
+    // of truth for idempotency and repeated-guess detection.
+    const mine = await ctx.db
+      .query("guesses")
+      .withIndex("by_room_round_player", (q) =>
+        q
+          .eq("roomId", room._id)
+          .eq("round", room.round)
+          .eq("playerId", player._id),
+      )
+      .collect();
+
+    // The same request replayed (double-click / second tab): answer from the
+    // row the first one already wrote instead of processing it again.
+    if (submissionId) {
+      const replayed = mine.find((g) => g.submissionId === submissionId);
+      if (replayed) {
+        const replayCorrect = replayed.status === "correct";
+        return {
+          correct: replayCorrect,
+          category,
+          answer: replayCorrect ? answerFor(question, category) : null,
+          solved: entry.status === "solved",
+          placement: entry.placement ?? null,
+          score: entry.score,
+          lives: entry.lives,
+          remaining: Math.max(0, MAX_LIVES - entry.lives),
+        };
+      }
     }
-    const globallyRevealed = question.revealedCategories ?? [];
-    // Somebody already missed this part, so the whole room knows the answer.
-    if (globallyRevealed.includes(category)) {
-      throw new Error("That answer is already out in the open.");
+
+    if (entry.status === "solved") {
+      throw new Error(
+        "🎉 YOU SOLVED THE MOVIE! Waiting for the other players...",
+      );
     }
-    // A solved part is locked — no farming it for extra points.
+    if (entry.status === "failed" || entry.lives <= 0) {
+      throw new Error("NO CHANCES LEFT — you can watch the remaining round.");
+    }
+    const label = CATEGORY_LABELS[category];
+    // A part is locked the moment THIS player has it — no farming, no repeats.
     if (revealedOf(entry)[category]) {
-      throw new Error("That part is already on your board.");
+      throw new Error(`✓ ${label} already solved.`);
     }
 
     const clean = cleanGuess(text);
+    const normalized = normalizeAnswer(clean);
+
+    // Repeated guess by THIS player for THIS part (case, spacing, punctuation
+    // and marks all folded away) → ignored: no chance spent, no broadcast.
+    const prior = mine.find(
+      (g) =>
+        g.category === category &&
+        (g.normalized || normalizeAnswer(g.text)) === normalized,
+    );
+    if (prior) {
+      throw new Error(
+        prior.status === "correct"
+          ? `✓ ${label} already solved.`
+          : `You've already guessed "${clean}" for ${label}. Try a different answer.`,
+      );
+    }
+
     const correct = gradeGuess(question, category, clean);
     const now = Date.now();
 
     await ctx.db.insert("guesses", {
       roomId: room._id,
       round: room.round,
+      questionId: question.questionId,
       playerId: player._id,
       playerName: player.name,
       category,
       text: clean,
+      normalized,
+      submissionId,
       status: correct ? "correct" : "wrong",
       createdAt: now,
     });
@@ -839,16 +871,15 @@ export const submitGuess = mutation({
 
     let revealed = revealedOf(entry);
     let solved = false;
-    let revealedGlobally = false;
     let placement: number | null = entry.placement ?? null;
     let score = entry.score;
     let lives = entry.lives;
 
     if (correct) {
+      // Private progress: this discovery is written to MY board only and is
+      // never broadcast — nobody else is told the part was found, or by whom.
       revealed = { ...revealed, [category]: true };
-      // A part the room already knows counts as filled, so a player who has
-      // only the remaining parts left can still close their board.
-      solved = boardComplete(revealed, globallyRevealed);
+      solved = boardComplete(revealed);
 
       if (solved) {
         // Closing the board earns a placement, paid the instant it lands.
@@ -874,6 +905,8 @@ export const submitGuess = mutation({
         completedAt: solved ? now : null,
       });
     } else {
+      // The miss is public, the answer is not: the guess row itself feeds the
+      // room's miss feed, one letter burns, and the part stays wide open.
       lives = Math.max(0, entry.lives - 1);
       await ctx.db.patch(entry._id, {
         lives,
@@ -881,35 +914,17 @@ export const submitGuess = mutation({
         status: lives === 0 ? "failed" : "playing",
         completedAt: lives === 0 ? now : null,
       });
-      // The miss is public: the answer now shows on every screen, this part is
-      // closed to further guesses, and it no longer has to be found by anyone.
-      if (!globallyRevealed.includes(category)) {
-        revealedGlobally = true;
-        await ctx.db.patch(room._id, {
-          question: {
-            ...question,
-            revealedCategories: [...globallyRevealed, category],
-          },
-        });
-      }
     }
 
     // Only the fresh row tells us whether everyone is done.
     const fresh = await ctx.db.get(room._id);
-    if (fresh) {
-      if (!correct && revealedGlobally) {
-        await awardRevealedCompletions(ctx, fresh);
-      }
-      await settleRound(ctx, fresh);
-    }
+    if (fresh) await settleRound(ctx, fresh);
 
     return {
       correct,
       category,
       /** The answer itself, handed back only on a correct guess. */
       answer: correct ? answerFor(question, category) : null,
-      /** True when a wrong guess just put this answer on every screen. */
-      revealedGlobally,
       solved,
       placement,
       score,
@@ -970,8 +985,7 @@ export const giveClue = mutation({
     if (!entry.clueRequested && MAX_LIVES - entry.lives < CLUE_UNLOCK_USED) {
       throw new Error("That player hasn't reached the clue yet.");
     }
-    const publiclyRevealed = room.question?.revealedCategories ?? [];
-    if (revealedOf(entry)[category] || publiclyRevealed.includes(category)) {
+    if (revealedOf(entry)[category]) {
       throw new Error("That part is already on their board.");
     }
 

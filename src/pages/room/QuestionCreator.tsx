@@ -380,8 +380,8 @@ export function QuestionCreator({
             heroine, the movie and the song — in any order they like.
           </p>
           <p className="mt-3 px-2 text-center text-[11px] leading-relaxed text-[#c08a6e]/85">
-            A wrong guess shows that answer to everyone and closes the part —
-            so write answers everyone can actually land.
+            A wrong guess shows the room WHAT was guessed — never your answer.
+            So write answers worth racing for.
           </p>
           {guessers > 0 ? (
             <p className="mt-2 text-center text-[11px] tracking-[0.18em] text-primary/70 uppercase">

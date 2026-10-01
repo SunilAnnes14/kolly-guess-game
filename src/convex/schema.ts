@@ -108,14 +108,6 @@ const schema = defineSchema(
             movie: v.array(v.string()),
             song: v.array(v.string()),
           }),
-          /**
-           * Parts whose answer is public knowledge for this question — set the
-           * moment ANY player guesses that part wrong. A revealed part can no
-           * longer be guessed by anyone (the answer is already on screen) and
-           * it fills that slot on every board, but it never counts as a
-           * discovery for the player who missed it.
-           */
-          revealedCategories: v.optional(v.array(categoryValidator)),
         }),
       ),
       /**
@@ -168,16 +160,29 @@ const schema = defineSchema(
     guesses: defineTable({
       roomId: v.id("rooms"),
       round: v.number(),
+      /** Which question this guess belonged to — one question per round. */
+      questionId: v.optional(v.string()),
       playerId: v.id("players"),
       playerName: v.string(),
       category: categoryValidator, // what the player was guessing
-      text: v.string(),
+      text: v.string(), // exactly what the player typed, for the record
+      /**
+       * `text` folded through normalizeAnswer — the server's authoritative
+       * key for repeated-guess detection (case, spacing, punctuation, marks).
+       */
+      normalized: v.string(),
+      /**
+       * Client-generated id so a double-click or a second tab replaying the
+       * same submission is processed at most once.
+       */
+      submissionId: v.optional(v.string()),
       /** Decided the instant the guess lands — there is no manual judging. */
       status: v.union(v.literal("correct"), v.literal("wrong")),
       createdAt: v.number(),
     })
       .index("by_room", ["roomId"])
-      .index("by_room_round", ["roomId", "round"]),
+      .index("by_room_round", ["roomId", "round"])
+      .index("by_room_round_player", ["roomId", "round", "playerId"]),
   },
   {
     schemaValidation: false,
