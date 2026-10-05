@@ -17,7 +17,7 @@ import {
   Sparkles,
   User,
 } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 /** Same first-letter rule the server uses (Latin or Tamil script). */
 function firstLetter(value: string): string {
@@ -65,10 +65,33 @@ export function QuestionCreator({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const results = useMemo(
-    () => (query.trim() ? searchMovies(query, 6) : []),
-    [query],
-  );
+  const search = query.trim();
+  const [debounced, setDebounced] = useState("");
+  const [results, setResults] = useState<MovieRecord[]>([]);
+  const [searchFailed, setSearchFailed] = useState(false);
+
+  // The library is searched on a short debounce, which gives the dropdown an
+  // honest "Searching…" beat and — critically — means an empty or
+  // whitespace-only query never runs a lookup at all. Every state write lands
+  // in the timer callback, never synchronously in the effect.
+  useEffect(() => {
+    if (!search) return;
+    const timer = window.setTimeout(() => {
+      try {
+        setResults(searchMovies(search, 6));
+        setSearchFailed(false);
+      } catch {
+        setResults([]);
+        setSearchFailed(true);
+      } finally {
+        setDebounced(search);
+      }
+    }, 140);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  // Still waiting on the debounce for what is currently typed.
+  const searching = !!search && search !== debounced;
 
   const guessers = room.isShowdown
     ? room.tiebreakIds.filter((id) => id !== room.me?.id).length
@@ -204,10 +227,10 @@ export function QuestionCreator({
             {mode === "library" && (
               <motion.div
                 key="library"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
               >
                 <div className="relative mt-4">
                   <div className="relative">
@@ -223,35 +246,70 @@ export function QuestionCreator({
                   </div>
 
                   <AnimatePresence>
-                    {results.length > 0 && (
-                      <motion.ul
+                    {search && (
+                      <motion.div
+                        key="movie-results"
                         initial={{ opacity: 0, y: -6 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -6 }}
-                        className="absolute inset-x-0 top-full z-20 mt-2 max-h-72 overflow-y-auto rounded-2xl border border-white/12 bg-[#1b1c17]/95 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                        className="absolute inset-x-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-white/12 bg-[#1b1c17]/95 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl"
                       >
-                        {results.map((entry) => (
-                          <li key={entry.id}>
+                        {searching ? (
+                          <p className="flex items-center gap-2 px-3.5 py-3 text-sm text-white/65">
+                            <Loader2 className="h-4 w-4 animate-spin text-primary/80" />
+                            🔍 Searching...
+                          </p>
+                        ) : searchFailed ? (
+                          <div className="px-3.5 py-3">
+                            <p className="text-sm font-semibold text-[#c08a6e]">
+                              ⚠ Unable to search movies
+                            </p>
+                            <p className="mt-1 text-xs text-white/50">
+                              Please try again
+                            </p>
+                          </div>
+                        ) : results.length > 0 ? (
+                          <ul className="max-h-72 overflow-y-auto p-1.5">
+                            {results.map((entry) => (
+                              <li key={entry.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => chooseMovie(entry)}
+                                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-primary/12"
+                                >
+                                  <span className="font-display text-lg leading-none text-primary/80">
+                                    {entry.year}
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-sm font-semibold text-white">
+                                      🎬 {entry.movie}
+                                    </span>
+                                    <span className="block truncate text-[11px] text-white/50">
+                                      {entry.hero} · {entry.heroine}
+                                    </span>
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="px-3.5 py-3">
+                            <p className="text-sm font-semibold text-white/85">
+                              No movies found
+                            </p>
+                            <p className="mt-1 text-xs text-white/50">
+                              Try another movie name
+                            </p>
                             <button
                               type="button"
-                              onClick={() => chooseMovie(entry)}
-                              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-primary/12"
+                              onClick={() => chooseMode("manual")}
+                              className="mt-2.5 flex h-9 items-center gap-1.5 rounded-xl border border-primary/45 bg-primary/10 px-3.5 text-xs font-semibold tracking-wide text-primary transition-all hover:-translate-y-0.5 hover:border-primary/70"
                             >
-                              <span className="font-display text-lg leading-none text-primary/80">
-                                {entry.year}
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-semibold text-white">
-                                  {entry.movie}
-                                </span>
-                                <span className="block truncate text-[11px] text-white/50">
-                                  {entry.hero} · {entry.heroine}
-                                </span>
-                              </span>
+                              <PencilLine className="h-3.5 w-3.5" /> + Enter Manually
                             </button>
-                          </li>
-                        ))}
-                      </motion.ul>
+                          </div>
+                        )}
+                      </motion.div>
                     )}
                   </AnimatePresence>
                 </div>

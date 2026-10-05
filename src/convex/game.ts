@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { isAnswerCorrect, normalizeAnswer } from "../lib/answers";
 import {
   answerAliasesFor,
@@ -163,7 +163,7 @@ function generateCode(): string {
 
 function cleanName(raw: string): string {
   const name = raw.trim().replace(/\s+/g, " ");
-  if (!name) throw new Error("Enter a player name to continue.");
+  if (!name) throw new ConvexError("Enter a player name to continue.");
   return name.slice(0, MAX_NAME);
 }
 
@@ -180,8 +180,8 @@ function initialOf(raw: string): string {
 
 function cleanGuess(raw: string): string {
   const text = raw.trim().replace(/\s+/g, " ");
-  if (!text) throw new Error("Type your guess first.");
-  if (text.length > MAX_GUESS) throw new Error("That guess is too long.");
+  if (!text) throw new ConvexError("Type your guess first.");
+  if (text.length > MAX_GUESS) throw new ConvexError("That guess is too long.");
   return text;
 }
 
@@ -192,7 +192,7 @@ async function roomByCode(ctx: Ctx, code: string): Promise<Doc<"rooms">> {
     .withIndex("by_code", (q) => q.eq("code", normalized))
     .unique();
   if (!room) {
-    throw new Error("No room found for that code. Check it and try again.");
+    throw new ConvexError("No room found for that code. Check it and try again.");
   }
   return room;
 }
@@ -202,7 +202,7 @@ async function playerByToken(ctx: Ctx, token: string): Promise<Doc<"players">> {
     .query("players")
     .withIndex("by_token", (q) => q.eq("token", token))
     .unique();
-  if (!player) throw new Error("Your seat expired. Rejoin the room.");
+  if (!player) throw new ConvexError("Your seat expired. Rejoin the room.");
   return player;
 }
 
@@ -324,7 +324,7 @@ export const createRoom = mutation({
         break;
       }
     }
-    if (!code) throw new Error("Could not open a room right now. Try again.");
+    if (!code) throw new ConvexError("Could not open a room right now. Try again.");
 
     const now = Date.now();
     const roomId = await ctx.db.insert("rooms", {
@@ -360,7 +360,7 @@ export const joinRoom = mutation({
     const room = await roomByCode(ctx, code);
     const existing = await playersInRoom(ctx, room._id);
     if (existing.length >= MAX_PLAYERS) {
-      throw new Error("This room is full (12 players max).");
+      throw new ConvexError("This room is full (12 players max).");
     }
 
     let clean = cleanName(name);
@@ -593,11 +593,11 @@ export const startGame = mutation({
   handler: async (ctx, { token }) => {
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
-    if (!room) throw new Error("Room not found.");
+    if (!room) throw new ConvexError("Room not found.");
     // Only from the lobby: a finished game must be reset so nobody carries a
     // stale board or a half-used set of chances into the new tournament.
     if (room.status !== "lobby") {
-      throw new Error(
+      throw new ConvexError(
         room.status === "finished"
           ? "Use \"Run it back\" to start a fresh tournament."
           : "The game is already running.",
@@ -606,10 +606,10 @@ export const startGame = mutation({
 
     const players = await playersInRoom(ctx, room._id);
     if (players.length < 2) {
-      throw new Error("Share your invite link — you need a friend to play.");
+      throw new ConvexError("Share your invite link — you need a friend to play.");
     }
     if (players[0]._id !== player._id) {
-      throw new Error("Only the room host can start the game.");
+      throw new ConvexError("Only the room host can start the game.");
     }
 
     await ctx.db.patch(room._id, {
@@ -647,13 +647,13 @@ export const submitQuestion = mutation({
   handler: async (ctx, args) => {
     const player = await playerByToken(ctx, args.token);
     const room = await ctx.db.get(player.roomId);
-    if (!room) throw new Error("Room not found.");
+    if (!room) throw new ConvexError("Room not found.");
     if (room.creatorId !== player._id) {
-      throw new Error("Only this round's question creator can write it.");
+      throw new ConvexError("Only this round's question creator can write it.");
     }
     const showdown = room.status === "tiebreak";
     if (room.status !== "creating" && !showdown) {
-      throw new Error("A question is already in play.");
+      throw new ConvexError("A question is already in play.");
     }
 
     // The creator's own entries are authoritative. A library pick only fills
@@ -665,7 +665,7 @@ export const submitQuestion = mutation({
     const song = (args.song ?? "").trim() || (picked?.songs[0] ?? "");
 
     if (!hero || !heroine || !movie || !song) {
-      throw new Error("Fill in the hero, heroine, movie and song.");
+      throw new ConvexError("Fill in the hero, heroine, movie and song.");
     }
     if (
       movie.length > 80 ||
@@ -673,7 +673,7 @@ export const submitQuestion = mutation({
       hero.length > 60 ||
       heroine.length > 60
     ) {
-      throw new Error("One of those entries is too long.");
+      throw new ConvexError("One of those entries is too long.");
     }
 
     const players = await playersInRoom(ctx, room._id);
@@ -683,7 +683,7 @@ export const submitQuestion = mutation({
       (p) => p._id !== player._id && (!showdown || tiedIds.includes(p._id)),
     );
     if (guessers.length === 0) {
-      throw new Error("Share your invite link — you need a friend to play.");
+      throw new ConvexError("Share your invite link — you need a friend to play.");
     }
 
     const now = Date.now();
@@ -768,25 +768,34 @@ export const submitGuess = mutation({
     submissionId: v.optional(v.string()),
   },
   handler: async (ctx, { token, category, text, submissionId }) => {
+    // Nothing undefined or empty ever reaches a database call. The validator
+    // already narrows `category`, but the token and the guess text are checked
+    // here so a malformed call fails with a plain, controlled message.
+    if (!token.trim()) throw new ConvexError("Your seat expired. Rejoin the room.");
+    if (!CATEGORY_ORDER.includes(category)) {
+      throw new ConvexError("Pick which part you're guessing first.");
+    }
+    if (!text.trim()) throw new ConvexError("Type your guess first.");
+
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
-    if (!room) throw new Error("Room not found.");
+    if (!room) throw new ConvexError("Room not found.");
     if (room.status !== "playing" && room.status !== "showdown") {
       // A stale tab firing after the whistle must never touch score or state.
-      throw new Error(
+      throw new ConvexError(
         room.status === "roundComplete" || room.status === "finished"
           ? "ROUND HAS ENDED — no more guesses for this question."
           : "No question is in play.",
       );
     }
     const question = room.question;
-    if (!question) throw new Error("No question is in play.");
+    if (!question) throw new ConvexError("No question is in play.");
     if (room.creatorId === player._id) {
-      throw new Error("You wrote this question — you sit this one out.");
+      throw new ConvexError("You wrote this question — you sit this one out.");
     }
 
     const entry = await entryFor(ctx, room._id, room.round, player._id);
-    if (!entry) throw new Error("You are not guessing this question.");
+    if (!entry) throw new ConvexError("You are not guessing this question.");
 
     // Every guess this player has made on this question — the single source
     // of truth for idempotency and repeated-guess detection.
@@ -806,31 +815,32 @@ export const submitGuess = mutation({
       const replayed = mine.find((g) => g.submissionId === submissionId);
       if (replayed) {
         const replayCorrect = replayed.status === "correct";
+        const replayCategory = (replayed.category ?? category) as Category;
         return {
           correct: replayCorrect,
-          category,
-          answer: replayCorrect ? answerFor(question, category) : null,
+          category: replayCategory,
+          answer: replayCorrect ? answerFor(question, replayCategory) : null,
           solved: entry.status === "solved",
           placement: entry.placement ?? null,
           score: entry.score,
           lives: entry.lives,
-          remaining: Math.max(0, MAX_LIVES - entry.lives),
+          remaining: entry.lives,
         };
       }
     }
 
     if (entry.status === "solved") {
-      throw new Error(
+      throw new ConvexError(
         "🎉 YOU SOLVED THE MOVIE! Waiting for the other players...",
       );
     }
     if (entry.status === "failed" || entry.lives <= 0) {
-      throw new Error("NO CHANCES LEFT — you can watch the remaining round.");
+      throw new ConvexError("NO CHANCES LEFT — you can watch the remaining round.");
     }
     const label = CATEGORY_LABELS[category];
     // A part is locked the moment THIS player has it — no farming, no repeats.
     if (revealedOf(entry)[category]) {
-      throw new Error(`✓ ${label} already solved.`);
+      throw new ConvexError(`✓ ${label} already solved.`);
     }
 
     const clean = cleanGuess(text);
@@ -844,7 +854,7 @@ export const submitGuess = mutation({
         (g.normalized || normalizeAnswer(g.text)) === normalized,
     );
     if (prior) {
-      throw new Error(
+      throw new ConvexError(
         prior.status === "correct"
           ? `✓ ${label} already solved.`
           : `You've already guessed "${clean}" for ${label}. Try a different answer.`,
@@ -929,7 +939,8 @@ export const submitGuess = mutation({
       placement,
       score,
       lives,
-      remaining: Math.max(0, MAX_LIVES - lives),
+      /** Chances this player still has on this board, not chances spent. */
+      remaining: lives,
     };
   },
 });
@@ -940,20 +951,20 @@ export const requestClue = mutation({
   handler: async (ctx, { token }) => {
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
-    if (!room) throw new Error("Room not found.");
+    if (!room) throw new ConvexError("Room not found.");
     if (room.status !== "playing" && room.status !== "showdown") {
-      throw new Error("No question is in play.");
+      throw new ConvexError("No question is in play.");
     }
 
     const entry = await entryFor(ctx, room._id, room.round, player._id);
-    if (!entry) throw new Error("You are not guessing this question.");
+    if (!entry) throw new ConvexError("You are not guessing this question.");
     if (entry.status !== "playing") {
-      throw new Error("You have already finished this question.");
+      throw new ConvexError("You have already finished this question.");
     }
-    if (entry.clue) throw new Error("Your clue is already on screen.");
-    if (entry.clueRequested) throw new Error("You already asked for a clue.");
+    if (entry.clue) throw new ConvexError("Your clue is already on screen.");
+    if (entry.clueRequested) throw new ConvexError("You already asked for a clue.");
     if (MAX_LIVES - entry.lives < CLUE_UNLOCK_USED) {
-      throw new Error(`A clue unlocks after ${CLUE_UNLOCK_USED} chances spent.`);
+      throw new ConvexError(`A clue unlocks after ${CLUE_UNLOCK_USED} chances spent.`);
     }
 
     await ctx.db.patch(entry._id, { clueRequested: true });
@@ -971,27 +982,27 @@ export const giveClue = mutation({
   handler: async (ctx, { token, playerId, category, text }) => {
     const creator = await playerByToken(ctx, token);
     const room = await ctx.db.get(creator.roomId);
-    if (!room) throw new Error("Room not found.");
+    if (!room) throw new ConvexError("Room not found.");
     if (room.creatorId !== creator._id) {
-      throw new Error("Only this round's question creator can drop a clue.");
+      throw new ConvexError("Only this round's question creator can drop a clue.");
     }
     if (room.status !== "playing" && room.status !== "showdown") {
-      throw new Error("No question is in play.");
+      throw new ConvexError("No question is in play.");
     }
 
     const entry = await entryFor(ctx, room._id, room.round, playerId);
-    if (!entry) throw new Error("That player is not in this round.");
-    if (entry.clue) throw new Error("That player already has their clue.");
+    if (!entry) throw new ConvexError("That player is not in this round.");
+    if (entry.clue) throw new ConvexError("That player already has their clue.");
     if (!entry.clueRequested && MAX_LIVES - entry.lives < CLUE_UNLOCK_USED) {
-      throw new Error("That player hasn't reached the clue yet.");
+      throw new ConvexError("That player hasn't reached the clue yet.");
     }
     if (revealedOf(entry)[category]) {
-      throw new Error("That part is already on their board.");
+      throw new ConvexError("That part is already on their board.");
     }
 
     const clue = text.trim().replace(/\s+/g, " ");
-    if (!clue) throw new Error("Type a clue first.");
-    if (clue.length > 140) throw new Error("Keep the clue under 140 characters.");
+    if (!clue) throw new ConvexError("Type a clue first.");
+    if (clue.length > 140) throw new ConvexError("Keep the clue under 140 characters.");
 
     await ctx.db.patch(entry._id, { clue, clueCategory: category });
     await ctx.db.patch(creator._id, { cluesUsed: creator.cluesUsed + 1 });
@@ -1009,14 +1020,14 @@ export const startNextRound = mutation({
   handler: async (ctx, { token }) => {
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
-    if (!room) throw new Error("Room not found.");
+    if (!room) throw new ConvexError("Room not found.");
     if (room.status !== "roundComplete") {
-      throw new Error("This round hasn't finished yet.");
+      throw new ConvexError("This round hasn't finished yet.");
     }
 
     const players = await playersInRoom(ctx, room._id);
     const next = players[creatorIndex(room.round + 1, room.roundsTotal)];
-    if (!next) throw new Error("Nobody is left to write the next question.");
+    if (!next) throw new ConvexError("Nobody is left to write the next question.");
 
     await ctx.db.patch(room._id, {
       round: room.round + 1,
@@ -1033,14 +1044,14 @@ export const restartGame = mutation({
   handler: async (ctx, { token }) => {
     const player = await playerByToken(ctx, token);
     const room = await ctx.db.get(player.roomId);
-    if (!room) throw new Error("Room not found.");
+    if (!room) throw new ConvexError("Room not found.");
     if (room.status !== "finished") {
-      throw new Error("Finish the game before starting a new one.");
+      throw new ConvexError("Finish the game before starting a new one.");
     }
 
     const players = await playersInRoom(ctx, room._id);
     if (players[0] && players[0]._id !== player._id) {
-      throw new Error("Only the room host can start a new game.");
+      throw new ConvexError("Only the room host can start a new game.");
     }
 
     const entries = await ctx.db
