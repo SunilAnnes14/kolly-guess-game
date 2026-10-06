@@ -291,8 +291,11 @@ export function typedAliases(
 
 /** Case-insensitive search over movie, hero and heroine. */
 export function searchMovies(query: string, limit = 8): MovieRecord[] {
+  // An empty or whitespace-only search never runs a lookup: no query, no
+  // results, no dropdown. The caller only ever reaches the library with
+  // something typed.
   const q = query.trim().toLowerCase();
-  if (!q) return MOVIE_LIBRARY.slice(0, limit);
+  if (!q) return [];
   return MOVIE_LIBRARY.filter(
     (entry) =>
       entry.movie.toLowerCase().includes(q) ||
