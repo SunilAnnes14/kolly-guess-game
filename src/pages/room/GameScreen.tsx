@@ -4,6 +4,7 @@ import { Leaderboard } from "@/components/kollywood/Leaderboard";
 import { LivesRow } from "@/components/kollywood/LivesRow";
 import { PlayersPanel } from "@/components/kollywood/PlayersPanel";
 import { PlusBoard } from "@/components/kollywood/PlusBoard";
+import { VotePanel } from "@/components/kollywood/VotePanel";
 import {
   CATEGORY_META,
   CATEGORY_ORDER,
@@ -86,6 +87,8 @@ export function GameScreen({
         ) : (
           <GuesserScreen room={room} token={token} />
         )}
+        {/* 🗳 the way out of a question nobody can crack — for everyone. */}
+        <VotePanel room={room} token={token} />
       </section>
 
       <aside className="flex flex-col gap-5">

@@ -16,7 +16,11 @@ import { friendlyError } from "@/lib/utils";
 import { GameScreen } from "@/pages/room/GameScreen";
 import { Lobby } from "@/pages/room/Lobby";
 import { QuestionCreator } from "@/pages/room/QuestionCreator";
-import { Champion, RoundComplete } from "@/pages/room/ResultOverlays";
+import {
+  Champion,
+  RoundComplete,
+  RoundSkipped,
+} from "@/pages/room/ResultOverlays";
 import type { RoomState } from "@/pages/room/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMutation, useQuery } from "convex/react";
@@ -98,7 +102,13 @@ export default function Room() {
       view = <GameScreen room={room} token={token} />;
       break;
     case "roundComplete":
-      view = <RoundComplete room={room} token={token} />;
+      // A round ended by unanimous VOTE TO MOVE ON gets its own reveal — the
+      // answer, no points, and the next question straight away.
+      view = room.skippedRound ? (
+        <RoundSkipped room={room} token={token} />
+      ) : (
+        <RoundComplete room={room} token={token} />
+      );
       break;
     case "finished":
       view = <Champion room={room} token={token} />;

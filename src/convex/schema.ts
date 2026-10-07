@@ -115,6 +115,19 @@ const schema = defineSchema(
        * who race the tie-break showdown. Empty outside a tie-break.
        */
       tiebreakIds: v.optional(v.array(v.id("players"))),
+      /**
+       * VOTE TO MOVE ON, for the CURRENT round only.
+       *
+       * `eligibleVoterIds` is frozen the instant the question goes live, so a
+       * player who joins mid-round never raises the bar for skipping it.
+       * `voteSkipIds` is who has voted to move on. `skippedRound` marks a round
+       * that ended by UNANIMOUS vote instead of being solved — it exists purely
+       * so the reveal can say so. All three are reset by the next question, so
+       * a vote can never carry over.
+       */
+      eligibleVoterIds: v.optional(v.array(v.id("players"))),
+      voteSkipIds: v.optional(v.array(v.id("players"))),
+      skippedRound: v.optional(v.boolean()),
       createdAt: v.number(),
     }).index("by_code", ["code"]),
 

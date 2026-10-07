@@ -267,12 +267,37 @@ async function entryFor(
     .unique();
 }
 
-/** Flip the room out of "playing" the moment the last player finishes. */
-async function settleRound(ctx: MutationCtx, room: Doc<"rooms">) {
-  const entries = await entriesForRound(ctx, room._id, room.round);
-  if (entries.length === 0) return;
-  if (entries.some((e) => e.status === "playing")) return;
+/**
+ * Who must vote to move the current round on.
+ *
+ * The round's eligible voters are frozen when the question goes live (the
+ * creator plus every guesser), so somebody joining mid-round can never raise
+ * the bar. We then intersect that list with the players still in the room — a
+ * seat that is gone must never hold the round hostage. Rooms written before
+ * this feature have no frozen list, so we fall back to the same set derived
+ * from the round's entries.
+ */
+function eligibleOf(
+  room: Doc<"rooms">,
+  entryPlayerIds: Id<"players">[],
+  presentIds: Id<"players">[],
+): Id<"players">[] {
+  const stored = room.eligibleVoterIds ?? [];
+  const base =
+    stored.length > 0
+      ? stored
+      : [
+          ...entryPlayerIds,
+          ...(room.creatorId ? [room.creatorId] : []),
+        ];
+  return base.filter((id) => presentIds.includes(id));
+}
 
+/**
+ * Where the tournament goes once a round is over — the normal finish AND the
+ * unanimous skip both land here, so a round can only ever be handed on once.
+ */
+async function finishRound(ctx: MutationCtx, room: Doc<"rooms">) {
   // The showdown is the last word — nothing follows the tie-break round.
   if (room.status === "showdown") {
     await ctx.db.patch(room._id, { status: "finished" });
@@ -293,6 +318,10 @@ async function settleRound(ctx: MutationCtx, room: Doc<"rooms">) {
         creatorId: judge._id,
         round: room.roundsTotal + 1,
         question: null,
+        // The decider is a fresh round — its own vote state, if anyone asks.
+        eligibleVoterIds: [],
+        voteSkipIds: [],
+        skippedRound: false,
       });
       return;
     }
@@ -301,6 +330,23 @@ async function settleRound(ctx: MutationCtx, room: Doc<"rooms">) {
   }
 
   await ctx.db.patch(room._id, { status: "roundComplete" });
+}
+
+/**
+ * Flip the room out of "playing" the moment the last player finishes.
+ *
+ * A round that ends the normal way also CANCELS any vote still running: the
+ * pending votes are discarded here and are never carried forward.
+ */
+async function settleRound(ctx: MutationCtx, room: Doc<"rooms">) {
+  const entries = await entriesForRound(ctx, room._id, room.round);
+  if (entries.length === 0) return;
+  if (entries.some((e) => e.status === "playing")) return;
+
+  if ((room.voteSkipIds ?? []).length > 0) {
+    await ctx.db.patch(room._id, { voteSkipIds: [] });
+  }
+  await finishRound(ctx, room);
 }
 
 /* ------------------------------------------------------------------ */
@@ -452,6 +498,40 @@ export const getRoom = query({
         ? (players[creatorIndex(nextRound, room.roundsTotal)] ?? null)
         : null;
 
+    /*
+     * VOTE TO MOVE ON. Voting is only ever open while a question is live, and
+     * only the players frozen into this round may cast a vote. The counter is
+     * public — who has voted, never why.
+     */
+    const votingOpen =
+      !!question && (room.status === "playing" || room.status === "showdown");
+    // A skipped round keeps its tally on screen for the reveal, even though
+    // voting itself is long closed.
+    const eligibleIds =
+      (votingOpen || !!room.skippedRound) && question
+        ? eligibleOf(
+            room,
+            entries.map((e) => e.playerId),
+            players.map((p) => p._id),
+          )
+        : [];
+    const votedIds = (room.voteSkipIds ?? []).filter((id) =>
+      eligibleIds.includes(id),
+    );
+    const voters = eligibleIds.flatMap((id) => {
+      const p = players.find((x) => x._id === id);
+      if (!p) return [];
+      return [
+        {
+          playerId: p._id,
+          name: p.name,
+          voted: votedIds.includes(p._id),
+          isMe: !!me && p._id === me._id,
+          isCreator: p._id === room.creatorId,
+        },
+      ];
+    });
+
     return {
       code: room.code,
       status: room.status,
@@ -470,6 +550,8 @@ export const getRoom = query({
       /** True while a tie-break decider is being written or raced. */
       isShowdown:
         room.status === "tiebreak" || room.status === "showdown",
+      /** This round ended by unanimous VOTE TO MOVE ON, not by being solved. */
+      skippedRound: !!room.skippedRound,
       question: question
         ? {
             initials: {
@@ -567,6 +649,29 @@ export const getRoom = query({
           isMine: entry.playerId === me?._id,
         };
       }),
+      /**
+       * Live vote-to-skip state. `voters` lists every eligible player with
+       * whether they have voted — never a yes/no, because there is none: this
+       * is a unanimous agreement to move on, not a contest.
+       */
+      voting: {
+        /** True while votes are still being collected for a live question. */
+        open: votingOpen,
+        /** True when this round ended by unanimous vote, not by solving it. */
+        skipped: !!room.skippedRound,
+        eligibleCount: eligibleIds.length,
+        votedCount: votedIds.length,
+        /** Most recent vote — `voteSkipIds` is append-ordered. */
+        lastVoterId:
+          votedIds.length > 0 ? votedIds[votedIds.length - 1] : null,
+        iVoted: !!me && votedIds.includes(me._id),
+        canVote:
+          votingOpen &&
+          !!me &&
+          eligibleIds.includes(me._id) &&
+          !votedIds.includes(me._id),
+        voters,
+      },
       me: me ? { id: me._id, name: me.name, isCreator, isHost } : null,
       players: players.map((p) => ({
         id: p._id,
@@ -619,6 +724,9 @@ export const startGame = mutation({
       creatorId: players[0]._id,
       question: null,
       tiebreakIds: [],
+      eligibleVoterIds: [],
+      voteSkipIds: [],
+      skippedRound: false,
     });
   },
 });
@@ -733,6 +841,14 @@ export const submitQuestion = mutation({
           song: aliases.song.slice(0, 12),
         },
       },
+      /**
+       * Freeze this question's voters the instant it goes live: the creator
+       * plus every player guessing it. A vote to skip needs ALL of them, and
+       * nobody who arrives later can change that list.
+       */
+      eligibleVoterIds: [player._id, ...guessers.map((g) => g._id)],
+      voteSkipIds: [],
+      skippedRound: false,
     });
 
     return { questionId };
@@ -945,6 +1061,102 @@ export const submitGuess = mutation({
   },
 });
 
+/**
+ * 🗳 VOTE TO MOVE ON — the safe alternative ending for a question nobody can
+ * crack.
+ *
+ * One vote per eligible player, and the round only moves on when EVERY
+ * eligible player has voted. There is no majority: three of four is not
+ * enough, and nobody — not even the question's author — can force a skip on
+ * their own.
+ *
+ * A skipped round ends exactly like any other: the answers are revealed, NO
+ * placement points are awarded (a skipped round simply doesn't pay, so scores
+ * stay exactly as they were), and the creator rotation hands the next question
+ * to the next player.
+ *
+ * Race protection: the whole handler runs in ONE Convex transaction, and the
+ * transition is guarded on the round still being live. Two players voting at
+ * the same instant can never start the next round twice — the loser of the
+ * race re-reads a closed round and does nothing. A round that gets solved the
+ * normal way first clears its votes, so the answer can never be skipped away
+ * after it has been earned.
+ */
+export const voteToSkipRound = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    if (!token.trim()) {
+      throw new ConvexError("Your seat expired. Rejoin the room.");
+    }
+    const player = await playerByToken(ctx, token);
+    const room = await ctx.db.get(player.roomId);
+    if (!room) throw new ConvexError("Room not found.");
+
+    const votes = room.voteSkipIds ?? [];
+    const live = room.status === "playing" || room.status === "showdown";
+
+    // The round has already ended (solved, skipped, or the game is over).
+    // A late vote is ignored rather than counted — it must never be a step
+    // towards starting a second next round.
+    if (!live || !room.question) {
+      return {
+        voted: false,
+        skipped: !!room.skippedRound,
+        voteCount: votes.length,
+        eligibleCount: votes.length,
+      };
+    }
+
+    const players = await playersInRoom(ctx, room._id);
+    const entries = await entriesForRound(ctx, room._id, room.round);
+    const eligible = eligibleOf(
+      room,
+      entries.map((e) => e.playerId),
+      players.map((p) => p._id),
+    );
+
+    // Only the players frozen into this round may vote — a late arrival only
+    // ever watches this one.
+    if (!eligible.includes(player._id)) {
+      throw new ConvexError("You joined this round late — no vote to cast.");
+    }
+    // One vote per player, enforced here and not just by the disabled button.
+    if (votes.includes(player._id)) {
+      throw new ConvexError("You've already voted to move on.");
+    }
+
+    const nextVotes = [...votes, player._id];
+    // Count only votes from players still in the room, so a seat that left can
+    // never hold the round open forever.
+    const unanimous = eligible.every((id) => nextVotes.includes(id));
+
+    if (!unanimous) {
+      await ctx.db.patch(room._id, { voteSkipIds: nextVotes });
+      return {
+        voted: true,
+        skipped: false,
+        voteCount: nextVotes.length,
+        eligibleCount: eligible.length,
+      };
+    }
+
+    // THE LAST VOTE → the round is abandoned. Close voting, mark it skipped so
+    // the reveal can say so, award nothing, and hand the clapperboard on.
+    await ctx.db.patch(room._id, {
+      voteSkipIds: nextVotes,
+      skippedRound: true,
+    });
+    await finishRound(ctx, room);
+
+    return {
+      voted: true,
+      skipped: true,
+      voteCount: nextVotes.length,
+      eligibleCount: eligible.length,
+    };
+  },
+});
+
 /** A player who has burned five of their own chances may ask for a clue. */
 export const requestClue = mutation({
   args: { token: v.string() },
@@ -1034,6 +1246,10 @@ export const startNextRound = mutation({
       creatorId: next._id,
       status: "creating",
       question: null,
+      // A brand-new round starts with a clean voting slate.
+      eligibleVoterIds: [],
+      voteSkipIds: [],
+      skippedRound: false,
     });
   },
 });
@@ -1083,6 +1299,9 @@ export const restartGame = mutation({
       creatorId: null,
       question: null,
       tiebreakIds: [],
+      eligibleVoterIds: [],
+      voteSkipIds: [],
+      skippedRound: false,
     });
   },
 });

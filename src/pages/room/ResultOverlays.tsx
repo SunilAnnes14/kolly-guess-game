@@ -435,6 +435,149 @@ export function RoundComplete({
 }
 
 /* ------------------------------------------------------------------ */
+/* Skipped — the room voted unanimously to move on                     */
+/* ------------------------------------------------------------------ */
+
+/** How long the skip reveal holds before the next round takes over. */
+const SKIP_ADVANCE_MS = 1800;
+
+/**
+ * A round that ended by UNANIMOUS vote rather than by solving the question.
+ *
+ * It is a different ending, not a lesser one: the answer is revealed to the
+ * whole room at last (the question is abandoned, so there is nothing left to
+ * spoil), nobody is paid for it, and the clapperboard goes to the next player
+ * in the rotation — automatically, with no button to press.
+ */
+export function RoundSkipped({
+  room,
+  token,
+}: {
+  room: RoomState;
+  token: string;
+}) {
+  const startNextRound = useMutation(api.game.startNextRound);
+  const [busy, setBusy] = useState(false);
+
+  // The same film-reel sting that closes any round.
+  useCue("roundComplete");
+
+  const answer = room.answerKey;
+  const voting = room.voting;
+
+  const advance = useCallback(async () => {
+    setBusy(true);
+    try {
+      await startNextRound({ token });
+    } catch {
+      // Every player in the room races to roll the round forward; whoever
+      // loses simply finds the room already on the next question. Nothing to
+      // report — the room state is the source of truth.
+    }
+  }, [startNextRound, token]);
+
+  useEffect(() => {
+    const go = window.setTimeout(() => void advance(), SKIP_ADVANCE_MS);
+    return () => window.clearTimeout(go);
+  }, [advance]);
+
+  return (
+    <Shell>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94, y: 18 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 200, damping: 20 }}
+        className="glass-deep grain relative overflow-hidden rounded-3xl px-5 py-9 text-center sm:px-9"
+      >
+        <div className="film-strip animate-strip absolute inset-x-0 top-0 h-7 opacity-40" />
+
+        <motion.p
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-[10px] font-semibold tracking-[0.4em] text-white/50 uppercase"
+        >
+          🗳 Everyone voted!
+        </motion.p>
+        <motion.p
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{
+            delay: 0.12,
+            type: "spring",
+            stiffness: 220,
+            damping: 18,
+          }}
+          className="font-display mt-3 text-3xl tracking-[0.16em] text-[#c0bba1] sm:text-4xl"
+        >
+          ROUND SKIPPED
+        </motion.p>
+        <p className="mt-2 text-xs font-semibold tracking-[0.2em] text-white/45 uppercase">
+          {voting.votedCount} / {voting.eligibleCount} voted — the question was
+          too tough
+        </p>
+
+        {/* The answer, revealed only now that the round is abandoned. */}
+        <div className="mx-auto mt-6 max-w-md">
+          <p className="text-center text-[10px] font-semibold tracking-[0.4em] text-[#c08a6e] uppercase">
+            🎟 Answer reveal
+          </p>
+          {answer && (
+            <div className="mt-3 text-center">
+              <RevealWord
+                text={answer.movie}
+                className="font-display text-glow-gold text-4xl leading-none tracking-[0.05em] gold-text sm:text-5xl"
+              />
+            </div>
+          )}
+          <ul className="mt-4 grid gap-2 text-left">
+            {PARTS.map((part, index) => (
+              <motion.li
+                key={part.key}
+                initial={{ opacity: 0, x: -14 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{
+                  delay: 0.3 + index * 0.06,
+                  duration: 0.4,
+                  ease: EASE,
+                }}
+                className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5"
+              >
+                <span aria-hidden className="text-base">
+                  {part.icon}
+                </span>
+                <span className="w-16 shrink-0 text-[10px] font-semibold tracking-[0.2em] text-white/45 uppercase">
+                  {part.label}
+                </span>
+                <span className="font-display min-w-0 flex-1 truncate text-lg tracking-wide text-white">
+                  {answer?.[part.key] ?? "—"}
+                </span>
+              </motion.li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="mt-5 text-[11px] leading-relaxed text-white/45">
+          No points awarded — a skipped question pays nobody, so every score is
+          exactly as it was.
+        </p>
+
+        <div className="olive-rule mx-auto mt-5 w-2/3" />
+
+        <p className="mt-4 flex items-center justify-center gap-2 text-xs text-white/50">
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+          ) : (
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+          )}
+          Moving to the next round…
+          {room.nextCreatorName ? ` ${room.nextCreatorName} is up next.` : ""}
+        </p>
+      </motion.div>
+    </Shell>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Finished — the KOLLYWOOD champion                                   */
 /* ------------------------------------------------------------------ */
 
