@@ -181,8 +181,9 @@ function RoomMissing({ code }: { code: string }) {
           NO SUCH SCREENING
         </p>
         <p className="mt-3 text-sm leading-relaxed text-white/60">
-          Room <span className="font-display text-primary">{code}</span>{" "}
-          doesn&apos;t exist — double-check the code your friend shared.
+          Room <span className="font-display text-primary">{code}</span> was not
+          found or is no longer available. Please ask the host for a new
+          invitation.
         </p>
         <Button
           type="button"

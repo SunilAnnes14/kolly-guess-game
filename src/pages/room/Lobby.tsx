@@ -1,4 +1,4 @@
-import { CopyButton } from "@/components/kollywood/CopyButton";
+import { CopyButton, copyText } from "@/components/kollywood/CopyButton";
 import { api } from "@/convex/_generated/api";
 import { inviteLink } from "@/lib/roomIdentity";
 import { cn, friendlyError } from "@/lib/utils";
@@ -14,6 +14,7 @@ import {
   Star,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 /**
  * The invite screen — the poster wall outside a private screening.
@@ -31,6 +32,7 @@ export function Lobby({ room, token }: { room: RoomState; token: string }) {
   const link = inviteLink(room.code);
   const enoughPlayers = room.players.length >= 2;
   const canShare = typeof navigator !== "undefined" && !!navigator.share;
+  const shareText = `Join my KOLLYWOOD room — cracking the hero, heroine, movie and song! Code ${room.code}`;
 
   const handleStart = async () => {
     setBusy(true);
@@ -45,14 +47,25 @@ export function Lobby({ room, token }: { room: RoomState; token: string }) {
   };
 
   const handleShare = async () => {
-    try {
-      await navigator.share({
-        title: "KOLLYWOOD",
-        text: `Join my KOLLYWOOD room — cracking the hero, heroine, movie and song! Code ${room.code}`,
-        url: link,
-      });
-    } catch {
-      // user dismissed the share sheet
+    if (canShare) {
+      try {
+        await navigator.share({
+          title: "KOLLYWOOD",
+          text: shareText,
+          url: link,
+        });
+        return;
+      } catch (err) {
+        // The user closed the share sheet — nothing to fall back to.
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        // Anything else (blocked, unsupported here) falls back to copying.
+      }
+    }
+    // Fallback for browsers without the Web Share API.
+    if (await copyText(link)) {
+      toast.success("Invite link copied 🎬");
+    } else {
+      toast.error("Could not share or copy the invite link — try COPY INVITE LINK.");
     }
   };
 
@@ -97,15 +110,14 @@ export function Lobby({ room, token }: { room: RoomState; token: string }) {
             successMessage="Room code copied"
             className="h-11 rounded-xl border-white/15 text-white/75"
           />
-          {canShare && (
-            <button
-              type="button"
-              onClick={handleShare}
-              className="flex h-11 items-center gap-2 rounded-xl border border-white/15 px-4 text-sm font-medium text-white/75 transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:text-primary"
-            >
-              <Share2 className="h-4 w-4" /> SHARE
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleShare}
+            title={canShare ? "Share invite link" : "Copy invite link"}
+            className="flex h-11 items-center gap-2 rounded-xl border border-white/15 px-4 text-sm font-medium text-white/75 transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:text-primary"
+          >
+            <Share2 className="h-4 w-4" /> SHARE
+          </button>
         </div>
       </motion.div>
 

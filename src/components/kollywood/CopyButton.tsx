@@ -4,6 +4,34 @@ import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+/**
+ * Copy text to the clipboard, falling back to a hidden textarea for browsers
+ * or webviews where the async Clipboard API is unavailable.
+ *
+ * Returns `false` when nothing could be copied, so callers can tell the user.
+ */
+export async function copyText(value: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    // Clipboard API can be unavailable in embedded webviews.
+    try {
+      const area = document.createElement("textarea");
+      area.value = value;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 /** Copy-to-clipboard button with a satisfying "copied" micro-interaction. */
 export function CopyButton({
   value,
@@ -25,23 +53,9 @@ export function CopyButton({
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      // Clipboard API can be unavailable in embedded webviews.
-      try {
-        const area = document.createElement("textarea");
-        area.value = value;
-        area.style.position = "fixed";
-        area.style.opacity = "0";
-        document.body.appendChild(area);
-        area.select();
-        document.execCommand("copy");
-        document.body.removeChild(area);
-      } catch {
-        toast.error("Could not copy — select the text manually.");
-        return;
-      }
+    if (!(await copyText(value))) {
+      toast.error("Could not copy — select the text manually.");
+      return;
     }
     setCopied(true);
     toast.success(successMessage);
